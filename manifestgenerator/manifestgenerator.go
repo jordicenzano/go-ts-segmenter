@@ -105,7 +105,7 @@ func (mg *ManifestGenerator) AddData(buf []byte) {
 
 	if mg.bytesToNextSync <= 0 {
 		// Process packet
-		if mg.tsPacket.Process() == false {
+		if mg.tsPacket.GetPID() < 0 {
 			mg.isInSync = false
 		} else {
 			mg.processedPackets++

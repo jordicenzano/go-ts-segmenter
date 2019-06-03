@@ -1,16 +1,23 @@
 package manifestgenerator
 
 import (
-	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
+	"encoding/hex"
 	"testing"
 )
+
+func parseHexString(h string) []byte {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		panic("bad test: " + h)
+	}
+	return b
+}
 
 func TestManifestGenerator(t *testing.T) {
 	mg := New(false, ".", "chunk_", 4.0, LiveWindow, 3, 0)
 
-	// Generate TS packet filled with 0
-	pckt := make([]byte, tspacket.TsDefaultPacketSize)
-	pckt[0] = 0x47
+	// Generate TS packet Pid = 1
+	pckt := parseHexString("474011100042F0250001C10000FF01FF0001FC80144812010646466D70656709536572766963653031777C43CAFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 	mg.AddData(pckt)
 
