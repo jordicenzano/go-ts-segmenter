@@ -21,8 +21,8 @@ type transportPacket struct {
 }
 
 type transportPacketAdaptationField struct {
-	length        uint8
-	presenceFlags uint8
+	Length        uint8
+	PresenceFlags uint8
 }
 
 // TsPacket Transport stream packet
@@ -38,8 +38,8 @@ type PidTable struct {
 }
 
 type transportPacketPCR struct {
-	pcrFisrt32 int32
-	pcr16      int16
+	PcrFisrt32 int32
+	Pcr16      int16
 }
 
 // New Creates a TsPacket instance
@@ -84,21 +84,26 @@ func (p *TsPacket) getAdaptationFieldData(r io.Reader, transportPacketData trans
 	return &transportPacketAdaptationFieldData
 }
 
-func (p *TsPacket) getPCRS(r io.Reader) *float64 {
+func (p *TsPacket) getPCRS(r io.Reader, transportPacketAdaptationFieldData transportPacketAdaptationField) *float64 {
+
+	if transportPacketAdaptationFieldData.PresenceFlags&0x00 == 0x10 {
+		return nil
+	}
+
 	var transportPacketPCRData transportPacketPCR
 	err := binary.Read(r, binary.BigEndian, &transportPacketPCRData)
 	if err != nil {
 		return nil
 	}
 
-	pcrBase := int64(transportPacketPCRData.pcrFisrt32)*2 + (int64(transportPacketPCRData.pcr16))&0x1
-	pcrExtension := int64(transportPacketPCRData.pcr16 & 0x1FF)
+	pcrBase := int64(transportPacketPCRData.PcrFisrt32)*2 + (int64(transportPacketPCRData.Pcr16))&0x1
+	pcrExtension := int64(transportPacketPCRData.Pcr16 & 0x1FF)
 
 	var pcrS float64 = -1
 	if pcrExtension > 0 {
 		pcrS = float64(pcrBase*300.0+pcrExtension) / (27.0 * 1000000.0)
 	} else {
-		pcrS = float64(pcrBase / 90000.0)
+		pcrS = float64(pcrBase) / 90000.0
 	}
 
 	return &pcrS
@@ -124,7 +129,7 @@ func (p *TsPacket) GetPCRS() (pcrS float64) {
 		return
 	}
 
-	pcrSret := p.getPCRS(r)
+	pcrSret := p.getPCRS(r, *transportPacketAdaptationFieldData)
 	if pcrSret == nil {
 		return
 	}
@@ -172,7 +177,7 @@ func (p *TsPacket) GetIDR() (isIDR bool) {
 		return
 	}
 
-	idrFlag := transportPacketAdaptationFieldData.presenceFlags & 0x40
+	idrFlag := transportPacketAdaptationFieldData.PresenceFlags & 0x40
 	if idrFlag > 0 {
 		isIDR = true
 	}
