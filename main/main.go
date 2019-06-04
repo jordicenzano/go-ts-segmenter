@@ -24,6 +24,8 @@ var (
 	liveWindowSize     = flag.Int("w", 3, "Live window size in chunks")
 	lhlsAdvancedChunks = flag.Int("l", 0, "LHLS advanced chunks")
 	manifestTypeInt    = flag.Int("m", 2, "Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window")
+	videoPID           = flag.Int("vpid", 256, "Video PID to parse")
+	audioPID           = flag.Int("apid", 257, "Audio PID to parse")
 )
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 	log.Info(manifestgenerator.Version, logPath)
 	log.Info("Started tssegmenter", logPath)
 
-	mg := manifestgenerator.New(*isCreatingChunks, *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
+	mg := manifestgenerator.New(log, *isCreatingChunks, *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, *videoPID, *audioPID, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
 
 	// Reader
 	r := bufio.NewReader(os.Stdin)

@@ -3,6 +3,7 @@ package manifestgenerator
 import (
 	"fmt"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
+	"github.com/sirupsen/logrus"
 )
 
 // Version Indicates the package version
@@ -23,10 +24,13 @@ const (
 )
 
 type options struct {
+	log                *logrus.Logger
 	isCreatingChunks   bool
 	baseOutPath        string
 	chunkBaseFilename  string
 	targetSegmentDurS  float64
+	videoPID           int
+	audioPID           int
 	manifestType       ManifestTypes
 	liveWindowSize     int
 	lhlsAdvancedChunks int
@@ -46,14 +50,18 @@ type ManifestGenerator struct {
 }
 
 // New Creates a chunklistgenerator instance
-func New(isCreatingChunks bool, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
-	e := ManifestGenerator{options{isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, tspacket.New(tspacket.TsDefaultPacketSize), 0}
+func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
+	if log == nil {
+		log = logrus.New()
+		log.SetLevel(logrus.DebugLevel)
+	}
+	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, tspacket.New(tspacket.TsDefaultPacketSize), 0}
 	return e
 }
 
 // Test test
 func (mg ManifestGenerator) Test() {
-	fmt.Printf("Test %v", mg)
+	mg.options.log.Info(Version)
 }
 
 func (mg *ManifestGenerator) resync(buf []byte) []byte {
@@ -84,6 +92,28 @@ func min(a, b int) int {
 	return b
 }
 
+func (mg *ManifestGenerator) processPacket() bool {
+	if !mg.tsPacket.Parse() {
+		return false
+	}
+
+	pID := mg.tsPacket.GetPID()
+	if pID == mg.options.videoPID {
+		mg.options.log.Debug("VIDEO: ", mg.tsPacket.ToString())
+		//TODO JOC
+	} else if pID == mg.options.audioPID {
+		mg.options.log.Debug("AUDIO: ", mg.tsPacket.ToString())
+		//TODO JOC
+	} else if pID >= 0 {
+		mg.options.log.Debug("OTHER: ", mg.tsPacket.ToString())
+	} else {
+		fmt.Println("OUT OF SYNC!!!")
+		return false
+	}
+
+	return true
+}
+
 // AddData process recived data
 func (mg *ManifestGenerator) AddData(buf []byte) {
 	if !mg.isInSync {
@@ -105,9 +135,10 @@ func (mg *ManifestGenerator) AddData(buf []byte) {
 
 	if mg.bytesToNextSync <= 0 {
 		// Process packet
-		if mg.tsPacket.GetPID() < 0 {
+		if mg.processPacket() == false {
 			mg.isInSync = false
 		} else {
+			mg.bytesToNextSync = tspacket.TsDefaultPacketSize
 			mg.processedPackets++
 			mg.tsPacket.Reset()
 		}
