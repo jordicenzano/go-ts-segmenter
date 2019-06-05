@@ -12,6 +12,10 @@ const (
 
 	// TsStartByte Start byte for TS pakcets
 	TsStartByte = 0x47
+
+	// StreamTypes
+	H264StreamType = 0x1B
+	ADTSStreamType = 0x0F
 )
 
 // transportPacketData TS packet info
@@ -78,16 +82,27 @@ type transportPacketAdaptationPCRFieldData struct {
 	valid                          bool
 }
 
+type ProgramMapTable struct {
+	PID   int
+	Video int
+	Audio int
+}
+
 // TsPacket Transport stream packet
 type TsPacket struct {
 	buf             []byte
 	lastIndex       int
 	transportPacket transportPacketData
+	PMT             ProgramMapTable
 }
 
 // New Creates a TsPacket instance
 func New(packetSize int) TsPacket {
-	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData)}
+	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData), ProgramMapTable{
+		PID:   -1,
+		Video: -1,
+		Audio: -1,
+	}}
 
 	return p
 }
@@ -209,6 +224,78 @@ func (p *TsPacket) Parse() bool {
 		}
 	}
 
+	// PAT Packet
+	if p.transportPacket.PID == 0 {
+		var pmtPID16b struct {
+			_      uint64
+			_      uint16
+			Pid16b uint16
+		}
+		err = binary.Read(r, binary.BigEndian, &pmtPID16b)
+		if err != nil {
+			return false
+		}
+		p.PMT.PID = int(pmtPID16b.Pid16b & 0x1FFF)
+	}
+
+	// PMT Packet
+	if p.PMT.PID != -1 && p.GetPID() == p.PMT.PID {
+		var tableInfo struct {
+			_                uint8
+			SectionLength    uint16
+			_                uint32
+			_                uint16
+			_                uint8
+			ProgamInfoLength uint16
+		}
+		err = binary.Read(r, binary.BigEndian, &tableInfo)
+		if err != nil {
+			return false
+		}
+
+		sectionLength := tableInfo.SectionLength & 0x0FFF
+		tableEnd := int(sectionLength - 13)
+
+		programInfoLength := tableInfo.ProgamInfoLength & 0x0FFF
+
+		paddingBytes := programInfoLength
+		offset := 0
+
+		for offset < tableEnd {
+			for paddingBytes > 0 {
+				var pad uint8
+				err = binary.Read(r, binary.BigEndian, &pad)
+				if err != nil {
+					return false
+				}
+				paddingBytes = paddingBytes - 1
+				offset = offset + 1
+			}
+			var program struct {
+				StreamType uint8
+				PID        uint16
+				Next       uint16
+			}
+			err = binary.Read(r, binary.BigEndian, &program)
+			if err != nil {
+				return false
+			}
+			offset = offset + 5
+
+			paddingBytes = program.Next & 0x0FFF
+			pid := int(program.PID & 0x1FFF)
+
+			switch program.StreamType {
+			case H264StreamType:
+				p.PMT.Video = pid
+			case ADTSStreamType:
+				p.PMT.Audio = pid
+			default:
+				// unknown stream type ignore
+			}
+		}
+	}
+
 	p.transportPacket.valid = true
 
 	return true
@@ -250,8 +337,8 @@ func (p *TsPacket) GetPID() (pID int) {
 	return
 }
 
-// ToString retuns packet data in string form
-func (p *TsPacket) ToString() string {
+// String retuns packet data in string form
+func (p *TsPacket) String() string {
 	ret := ""
 	if !p.transportPacket.valid {
 		return ret

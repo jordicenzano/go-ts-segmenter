@@ -2,6 +2,7 @@ package manifestgenerator
 
 import (
 	"fmt"
+
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
 )
@@ -109,8 +110,13 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	}
 
 	pID := mg.tsPacket.GetPID()
-	if pID == mg.options.videoPID {
-		mg.options.log.Debug("VIDEO: ", mg.tsPacket.ToString())
+
+	if pID == 0 {
+		mg.options.log.Debug("PAT: ", mg.tsPacket.String())
+	} else if pID == mg.tsPacket.PMT.PID {
+		mg.options.log.Debug("PMT: ", mg.tsPacket.String())
+	} else if pID == mg.tsPacket.PMT.Video {
+		mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
 		pcrS := mg.tsPacket.GetPCRS()
 		if pcrS >= 0 {
 			mg.lastPCRs = pcrS
@@ -124,11 +130,11 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 			//TODO: JOC Caclulate rollover
 			mg.nextChunk(pcrS, durS)
 		}
-	} else if pID == mg.options.audioPID {
-		mg.options.log.Debug("AUDIO: ", mg.tsPacket.ToString())
+	} else if pID == mg.tsPacket.PMT.Audio {
+		mg.options.log.Debug("AUDIO: ", mg.tsPacket.String())
 		//TODO JOC
 	} else if pID >= 0 {
-		mg.options.log.Debug("OTHER: ", mg.tsPacket.ToString())
+		mg.options.log.Debug("OTHER: ", mg.tsPacket.String())
 	} else {
 		fmt.Println("OUT OF SYNC!!!")
 		return false
