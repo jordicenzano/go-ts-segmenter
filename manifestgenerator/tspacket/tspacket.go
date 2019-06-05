@@ -10,8 +10,11 @@ const (
 	// TsDefaultPacketSize Default TS packet size
 	TsDefaultPacketSize = 188
 
-	// TsStartByte Start byte for TS pakcets
-	TsStartByte = 0x47
+	// MaxPCRSValue (in seconds). 2^33 / 90000 (33 bits used by pcr with timebase of 90KHz)
+	MaxPCRSValue = 95443
+
+	// tsStartByte Start byte for TS pakcets
+	tsStartByte = 0x47
 )
 
 // transportPacketData TS packet info
@@ -106,7 +109,7 @@ func (p *TsPacket) AddData(buf []byte) {
 
 // IsComplete Adds bytes to the packet
 func (p *TsPacket) IsComplete() bool {
-	if p.lastIndex == TsDefaultPacketSize && p.buf[0] == TsStartByte {
+	if p.lastIndex == TsDefaultPacketSize && p.buf[0] == tsStartByte {
 		return true
 	}
 	return false
