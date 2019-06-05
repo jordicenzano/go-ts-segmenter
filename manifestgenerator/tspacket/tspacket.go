@@ -8,14 +8,16 @@ import (
 
 const (
 	// TsDefaultPacketSize Default TS packet size
-	TsDefaultPacketSize = 188
+	TsDefaultPacketSize int = 188
 
 	// TsStartByte Start byte for TS pakcets
-	TsStartByte = 0x47
+	TsStartByte uint8 = 0x47
 
-	// StreamTypes
-	H264StreamType = 0x1B
-	ADTSStreamType = 0x0F
+	// H264StreamType indicates h264 video ES
+	H264StreamType uint8 = 0x1B
+
+	// ADTSStreamType indicates audio ADTS ES
+	ADTSStreamType uint8 = 0x0F
 )
 
 // transportPacketData TS packet info
@@ -30,6 +32,8 @@ type transportPacketData struct {
 	AdaptationFieldControl     uint8
 	ContinuityCounter          uint8
 	AdaptationField            transportPacketAdaptationFieldData
+	Pat                        programAddressTable
+	Pmt                        programMapTable
 }
 
 // Reset transportPacketData
@@ -57,6 +61,12 @@ func (t *transportPacketData) Reset() {
 	t.AdaptationField.PCRData.ProgramClockReferenceExtension = 0
 	t.AdaptationField.PCRData.reserved = 0
 	t.AdaptationField.PCRData.PCRs = 0
+	t.Pat.valid = false
+	t.Pat.PmtPID = 0
+	t.Pmt.valid = false
+	t.Pmt.AudioADTS = t.Pmt.AudioADTS[:0]
+	t.Pmt.Videoh264 = t.Pmt.Videoh264[:0]
+	t.Pmt.Other = t.Pmt.Other[:0]
 }
 
 // transportPacketAdaptationFieldData TS adaptation field packet info
@@ -82,10 +92,18 @@ type transportPacketAdaptationPCRFieldData struct {
 	valid                          bool
 }
 
-type ProgramMapTable struct {
-	PID   int
-	Video int
-	Audio int
+// PAT data storing the PMT ID
+type programAddressTable struct {
+	valid  bool
+	PmtPID uint16
+}
+
+// PMT data storing the video and audio PIDs to process
+type programMapTable struct {
+	valid     bool
+	Videoh264 []uint16
+	AudioADTS []uint16
+	Other     []uint16
 }
 
 // TsPacket Transport stream packet
@@ -93,16 +111,13 @@ type TsPacket struct {
 	buf             []byte
 	lastIndex       int
 	transportPacket transportPacketData
-	PMT             ProgramMapTable
+	pat             programAddressTable
+	pmt             programMapTable
 }
 
 // New Creates a TsPacket instance
 func New(packetSize int) TsPacket {
-	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData), ProgramMapTable{
-		PID:   -1,
-		Video: -1,
-		Audio: -1,
-	}}
+	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData), programAddressTable{valid: false, PmtPID: 0}, programMapTable{valid: false}}
 
 	return p
 }
@@ -235,11 +250,12 @@ func (p *TsPacket) Parse() bool {
 		if err != nil {
 			return false
 		}
-		p.PMT.PID = int(pmtPID16b.Pid16b & 0x1FFF)
+		p.transportPacket.Pat.PmtPID = pmtPID16b.Pid16b & 0x1FFF
+		p.transportPacket.Pat.valid = true
 	}
 
 	// PMT Packet
-	if p.PMT.PID != -1 && p.GetPID() == p.PMT.PID {
+	if p.transportPacket.Pat.valid && p.transportPacket.Pat.PmtPID == p.transportPacket.PID {
 		var tableInfo struct {
 			_                uint8
 			SectionLength    uint16
@@ -260,12 +276,6 @@ func (p *TsPacket) Parse() bool {
 
 		paddingBytes := programInfoLength
 		offset := 0
-
-		pmt := ProgramMapTable{
-			PID:   p.GetPID(),
-			Video: -1,
-			Audio: -1,
-		}
 
 		for offset < tableEnd {
 			for paddingBytes > 0 {
@@ -289,22 +299,19 @@ func (p *TsPacket) Parse() bool {
 			offset = offset + 5
 
 			paddingBytes = program.Next & 0x0FFF
-			pid := int(program.PID & 0x1FFF)
+			pid := program.PID & 0x1FFF
 
 			switch program.StreamType {
 			case H264StreamType:
-				if pmt.Video == -1 {
-					p.PMT.Video = pid
-				}
+				p.transportPacket.Pmt.Videoh264 = append(p.transportPacket.Pmt.Videoh264, pid)
 			case ADTSStreamType:
-				if pmt.Audio == -1 {
-					p.PMT.Audio = pid
-				}
+				p.transportPacket.Pmt.AudioADTS = append(p.transportPacket.Pmt.AudioADTS, pid)
 			default:
-				// unknown stream type ignore
+				p.transportPacket.Pmt.Other = append(p.transportPacket.Pmt.Other, pid)
 			}
+
+			p.transportPacket.Pmt.valid = true
 		}
-		p.PMT = pmt
 	}
 
 	p.transportPacket.valid = true
@@ -332,6 +339,36 @@ func (p *TsPacket) GetPCRS() (PCRs float64) {
 	}
 
 	PCRs = p.transportPacket.AdaptationField.PCRData.PCRs
+
+	return
+}
+
+// GetPATdata Gets the PAT info if present (so PMT PID)
+func (p *TsPacket) GetPATdata() (PMTPID int) {
+	PMTPID = -1
+	if !p.transportPacket.valid {
+		return
+	}
+
+	PMTPID = int(p.transportPacket.Pat.PmtPID)
+
+	return
+}
+
+// GetPMTdata Gets the PMT dta if present (video, audios, and other PIDs)
+func (p *TsPacket) GetPMTdata() (valid bool, Videoh264 []uint16, AudioADTS []uint16, Other []uint16) {
+	valid = false
+	if !p.transportPacket.valid {
+		return
+	}
+
+	if !p.transportPacket.Pmt.valid {
+		return
+	}
+
+	Videoh264 = p.transportPacket.Pmt.Videoh264
+	AudioADTS = p.transportPacket.Pmt.AudioADTS
+	Other = p.transportPacket.Pmt.Other
 
 	return
 }
