@@ -1,4 +1,5 @@
 bin/
 logs/
+results/
 fixture/test.ts
 .DS_Store

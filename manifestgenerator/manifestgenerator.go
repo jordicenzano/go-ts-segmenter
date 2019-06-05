@@ -3,6 +3,7 @@ package manifestgenerator
 import (
 	"fmt"
 
+	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
 )
@@ -22,6 +23,17 @@ const (
 
 	//LiveWindow Indicates a live manifest type sliding window (fixed size)
 	LiveWindow
+)
+
+const (
+	//GhostPrefixDefault ghost chunk prefix
+	GhostPrefixDefault = ".growing_"
+
+	//ChunkFileNumberLength chunk filenumber length
+	ChunkFileNumberLength = 5
+
+	//ChunkFileExtensionDefault default chunk extension
+	ChunkFileExtensionDefault = ".ts"
 )
 
 const (
@@ -61,6 +73,10 @@ type ManifestGenerator struct {
 
 	// Packet counter
 	processedPackets uint64
+
+	//currentChunk info
+	currentChunk      *mediachunk.Chunk
+	currentChunkIndex uint64
 }
 
 // New Creates a chunklistgenerator instance
@@ -69,7 +85,7 @@ func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBas
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
-	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0}
+	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0}
 	return e
 }
 
@@ -111,6 +127,7 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 		return false
 	}
 
+	// Detect video & audio PIDs
 	if mg.options.autoPIDs {
 		pmtID := mg.tsPacket.GetPATdata()
 		if pmtID >= 0 {
@@ -132,8 +149,10 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	}
 
 	pID := mg.tsPacket.GetPID()
-
 	if pID == mg.options.videoPID {
+		mg.addPacketToChunk()
+
+		// Detect if we need to chunk it
 		mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
 		pcrS := mg.tsPacket.GetPCRS()
 		if pcrS >= 0 {
@@ -144,15 +163,17 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 			}
 			durS := pcrS - mg.chunkStartTimeS
 			if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
-				//TODO: Chunk
-				_, nextInitialPCRS := mg.nextChunk(pcrS, durS, tspacket.MaxPCRSValue)
+				//TODO: Chunk First param is the real chunk durartion
+				//TODO: JOC duration of chunk to HLS
+
+				_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
 
 				mg.chunkStartTimeS = nextInitialPCRS
 			}
 		}
 	} else if pID == mg.options.audioPID {
+		mg.addPacketToChunk()
 		mg.options.log.Debug("AUDIO: ", mg.tsPacket.String())
-		//TODO JOC
 	} else if pID >= 0 {
 		mg.options.log.Debug("OTHER: ", mg.tsPacket.String())
 	} else {
@@ -163,8 +184,57 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	return true
 }
 
+func (mg *ManifestGenerator) addPacketToChunk() {
+
+	if mg.currentChunk == nil {
+		mg.createChunk()
+	}
+
+	err := mg.currentChunk.AddData(mg.tsPacket.GetBuffer())
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (mg *ManifestGenerator) closeChunk() {
+	// Close current
+
+	if mg.currentChunk != nil {
+		mg.currentChunk.Close()
+		mg.currentChunk = nil
+	}
+
+	mg.currentChunkIndex++
+
+	return
+}
+
+func (mg *ManifestGenerator) createChunk() {
+	// Close current
+	chunkOptions := mediachunk.Options{
+		OutputTo:           mediachunk.File,
+		LHLS:               false,
+		EstimatedDurationS: mg.options.targetSegmentDurS,
+		FileNumberLength:   ChunkFileNumberLength,
+		GhostPrefix:        GhostPrefixDefault,
+		FileExtension:      ChunkFileExtensionDefault,
+		BasePath:           mg.options.baseOutPath,
+		ChunkBaseFilename:  mg.options.chunkBaseFilename}
+
+	newChunk := mediachunk.New(mg.currentChunkIndex, chunkOptions)
+
+	mg.currentChunk = &newChunk
+
+	err := mg.currentChunk.InitializeChunk()
+	if err != nil {
+		panic(err)
+	}
+
+	return
+}
+
 // Creates chunk and returns the initial time for the next chunk
-func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS float64, maxPCRs float64) (chunkDurationS float64, nextInitialPCRS float64) {
+func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS float64, maxPCRs float64, final bool) (chunkDurationS float64, nextInitialPCRS float64) {
 	chunkDurationS = -1.0
 	nextInitialPCRS = currentPCRS
 
@@ -178,13 +248,18 @@ func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS floa
 
 	mg.options.log.Info("CHUNK! At PCRs: ", currentPCRS, ". ChunkDurS: ", chunkDurationS)
 
+	mg.closeChunk()
+	if !final {
+		mg.createChunk()
+	}
+
 	return
 }
 
 // Close Closes manigest processing saving last data and last chunk
 func (mg *ManifestGenerator) Close() {
 	//Generate last chunk
-	mg.nextChunk(mg.lastPCRS, mg.chunkStartTimeS, tspacket.MaxPCRSValue)
+	mg.nextChunk(mg.lastPCRS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, true)
 }
 
 // AddData process recived data

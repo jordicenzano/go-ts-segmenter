@@ -140,6 +140,11 @@ func (p *TsPacket) AddData(buf []byte) {
 	p.lastIndex = p.lastIndex + copy(p.buf[p.lastIndex:], buf[:])
 }
 
+// GetBuffer Gets the buffer
+func (p *TsPacket) GetBuffer() []byte {
+	return p.buf
+}
+
 // IsComplete Adds bytes to the packet
 func (p *TsPacket) IsComplete() bool {
 	if p.lastIndex == TsDefaultPacketSize && p.buf[0] == tsStartByte {
