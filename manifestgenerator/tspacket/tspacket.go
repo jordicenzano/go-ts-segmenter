@@ -18,6 +18,9 @@ const (
 
 	// ADTSStreamType indicates audio ADTS ES
 	ADTSStreamType uint8 = 0x0F
+
+	// PATPID PID of PAT table
+	PATPID uint16 = 0
 )
 
 // transportPacketData TS packet info
@@ -143,7 +146,7 @@ func (p *TsPacket) IsComplete() bool {
 }
 
 // Parse Parse the packet
-func (p *TsPacket) Parse() bool {
+func (p *TsPacket) Parse(pmtPID int) bool {
 	if !p.IsComplete() {
 		return false
 	}
@@ -239,23 +242,52 @@ func (p *TsPacket) Parse() bool {
 		}
 	}
 
-	// PAT Packet
-	if p.transportPacket.PID == 0 {
+	if p.transportPacket.PID == PATPID || int(p.transportPacket.PID) == pmtPID {
+		if p.transportPacket.PayloadUnitStartIndicator {
+			var length uint8
+
+			err = binary.Read(r, binary.BigEndian, &length)
+			if err != nil {
+				return false
+			}
+
+			var n uint8
+			var dummyByte uint8
+			for n < length {
+				err = binary.Read(r, binary.BigEndian, &dummyByte)
+				if err != nil {
+					return false
+				}
+
+				n++
+			}
+		}
+	}
+
+	// PAT Packet (Getting the 1st PMT info, so assuming only one program and there is NO network ID)
+	if p.transportPacket.PID == PATPID {
 		var pmtPID16b struct {
-			_      uint64
-			_      uint16
-			Pid16b uint16
+			TableID                    uint8
+			FlagsReservedSectionLength uint16
+			TSId                       uint16
+			Flags                      uint8
+			SectionNumber              uint8
+			LastSectionNumber          uint8
+
+			//Initial PMT
+			ProgramNumber  uint16
+			ReservedPMTPID uint16
 		}
 		err = binary.Read(r, binary.BigEndian, &pmtPID16b)
 		if err != nil {
 			return false
 		}
-		p.transportPacket.Pat.PmtPID = pmtPID16b.Pid16b & 0x1FFF
+		p.transportPacket.Pat.PmtPID = pmtPID16b.ReservedPMTPID & 0x1FFF
 		p.transportPacket.Pat.valid = true
 	}
 
 	// PMT Packet
-	if p.transportPacket.Pat.valid && p.transportPacket.Pat.PmtPID == p.transportPacket.PID {
+	if pmtPID == int(p.transportPacket.PID) {
 		var tableInfo struct {
 			_                uint8
 			SectionLength    uint16
@@ -346,7 +378,7 @@ func (p *TsPacket) GetPCRS() (PCRs float64) {
 // GetPATdata Gets the PAT info if present (so PMT PID)
 func (p *TsPacket) GetPATdata() (PMTPID int) {
 	PMTPID = -1
-	if !p.transportPacket.valid {
+	if !p.transportPacket.valid || !p.transportPacket.Pat.valid {
 		return
 	}
 
@@ -358,17 +390,14 @@ func (p *TsPacket) GetPATdata() (PMTPID int) {
 // GetPMTdata Gets the PMT dta if present (video, audios, and other PIDs)
 func (p *TsPacket) GetPMTdata() (valid bool, Videoh264 []uint16, AudioADTS []uint16, Other []uint16) {
 	valid = false
-	if !p.transportPacket.valid {
-		return
-	}
-
-	if !p.transportPacket.Pmt.valid {
+	if !p.transportPacket.valid || !p.transportPacket.Pmt.valid {
 		return
 	}
 
 	Videoh264 = p.transportPacket.Pmt.Videoh264
 	AudioADTS = p.transportPacket.Pmt.AudioADTS
 	Other = p.transportPacket.Pmt.Other
+	valid = true
 
 	return
 }

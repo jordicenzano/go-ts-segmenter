@@ -69,7 +69,7 @@ func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBas
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
-	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0}
+	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0}
 	return e
 }
 
@@ -107,7 +107,7 @@ func min(a, b int) int {
 }
 
 func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
-	if !mg.tsPacket.Parse() {
+	if !mg.tsPacket.Parse(mg.detectedPMTID) {
 		return false
 	}
 
