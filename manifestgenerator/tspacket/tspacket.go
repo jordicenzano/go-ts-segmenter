@@ -261,6 +261,12 @@ func (p *TsPacket) Parse() bool {
 		paddingBytes := programInfoLength
 		offset := 0
 
+		pmt := ProgramMapTable{
+			PID:   p.GetPID(),
+			Video: -1,
+			Audio: -1,
+		}
+
 		for offset < tableEnd {
 			for paddingBytes > 0 {
 				var pad uint8
@@ -287,13 +293,18 @@ func (p *TsPacket) Parse() bool {
 
 			switch program.StreamType {
 			case H264StreamType:
-				p.PMT.Video = pid
+				if pmt.Video == -1 {
+					p.PMT.Video = pid
+				}
 			case ADTSStreamType:
-				p.PMT.Audio = pid
+				if pmt.Audio == -1 {
+					p.PMT.Audio = pid
+				}
 			default:
 				// unknown stream type ignore
 			}
 		}
+		p.PMT = pmt
 	}
 
 	p.transportPacket.valid = true
