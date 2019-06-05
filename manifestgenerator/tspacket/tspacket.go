@@ -8,13 +8,22 @@ import (
 
 const (
 	// TsDefaultPacketSize Default TS packet size
-	TsDefaultPacketSize = 188
+	TsDefaultPacketSize int = 188
 
 	// MaxPCRSValue (in seconds). 2^33 / 90000 (33 bits used by pcr with timebase of 90KHz)
-	MaxPCRSValue = 95443
+	MaxPCRSValue float64 = 95443
 
 	// tsStartByte Start byte for TS pakcets
-	tsStartByte = 0x47
+	tsStartByte uint8 = 0x47
+
+	// H264StreamType indicates h264 video ES
+	H264StreamType uint8 = 0x1B
+
+	// ADTSStreamType indicates audio ADTS ES
+	ADTSStreamType uint8 = 0x0F
+
+	// PATPID PID of PAT table
+	PATPID uint16 = 0
 )
 
 // transportPacketData TS packet info
@@ -29,6 +38,8 @@ type transportPacketData struct {
 	AdaptationFieldControl     uint8
 	ContinuityCounter          uint8
 	AdaptationField            transportPacketAdaptationFieldData
+	Pat                        programAddressTable
+	Pmt                        programMapTable
 }
 
 // Reset transportPacketData
@@ -56,6 +67,12 @@ func (t *transportPacketData) Reset() {
 	t.AdaptationField.PCRData.ProgramClockReferenceExtension = 0
 	t.AdaptationField.PCRData.reserved = 0
 	t.AdaptationField.PCRData.PCRs = 0
+	t.Pat.valid = false
+	t.Pat.PmtPID = 0
+	t.Pmt.valid = false
+	t.Pmt.AudioADTS = t.Pmt.AudioADTS[:0]
+	t.Pmt.Videoh264 = t.Pmt.Videoh264[:0]
+	t.Pmt.Other = t.Pmt.Other[:0]
 }
 
 // transportPacketAdaptationFieldData TS adaptation field packet info
@@ -81,16 +98,32 @@ type transportPacketAdaptationPCRFieldData struct {
 	valid                          bool
 }
 
+// PAT data storing the PMT ID
+type programAddressTable struct {
+	valid  bool
+	PmtPID uint16
+}
+
+// PMT data storing the video and audio PIDs to process
+type programMapTable struct {
+	valid     bool
+	Videoh264 []uint16
+	AudioADTS []uint16
+	Other     []uint16
+}
+
 // TsPacket Transport stream packet
 type TsPacket struct {
 	buf             []byte
 	lastIndex       int
 	transportPacket transportPacketData
+	pat             programAddressTable
+	pmt             programMapTable
 }
 
 // New Creates a TsPacket instance
 func New(packetSize int) TsPacket {
-	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData)}
+	p := TsPacket{make([]byte, packetSize), 0, *new(transportPacketData), programAddressTable{valid: false, PmtPID: 0}, programMapTable{valid: false}}
 
 	return p
 }
@@ -116,7 +149,7 @@ func (p *TsPacket) IsComplete() bool {
 }
 
 // Parse Parse the packet
-func (p *TsPacket) Parse() bool {
+func (p *TsPacket) Parse(pmtPID int) bool {
 	if !p.IsComplete() {
 		return false
 	}
@@ -212,6 +245,110 @@ func (p *TsPacket) Parse() bool {
 		}
 	}
 
+	if p.transportPacket.PID == PATPID || int(p.transportPacket.PID) == pmtPID {
+		if p.transportPacket.PayloadUnitStartIndicator {
+			var length uint8
+
+			err = binary.Read(r, binary.BigEndian, &length)
+			if err != nil {
+				return false
+			}
+
+			var n uint8
+			var dummyByte uint8
+			for n < length {
+				err = binary.Read(r, binary.BigEndian, &dummyByte)
+				if err != nil {
+					return false
+				}
+
+				n++
+			}
+		}
+	}
+
+	// PAT Packet (Getting the 1st PMT info, so assuming only one program and there is NO network ID)
+	if p.transportPacket.PID == PATPID {
+		var pmtPID16b struct {
+			TableID                    uint8
+			FlagsReservedSectionLength uint16
+			TSId                       uint16
+			Flags                      uint8
+			SectionNumber              uint8
+			LastSectionNumber          uint8
+
+			//Initial PMT
+			ProgramNumber  uint16
+			ReservedPMTPID uint16
+		}
+		err = binary.Read(r, binary.BigEndian, &pmtPID16b)
+		if err != nil {
+			return false
+		}
+		p.transportPacket.Pat.PmtPID = pmtPID16b.ReservedPMTPID & 0x1FFF
+		p.transportPacket.Pat.valid = true
+	}
+
+	// PMT Packet
+	if pmtPID == int(p.transportPacket.PID) {
+		var tableInfo struct {
+			_                uint8
+			SectionLength    uint16
+			_                uint32
+			_                uint16
+			_                uint8
+			ProgamInfoLength uint16
+		}
+		err = binary.Read(r, binary.BigEndian, &tableInfo)
+		if err != nil {
+			return false
+		}
+
+		sectionLength := tableInfo.SectionLength & 0x0FFF
+		tableEnd := int(sectionLength - 13)
+
+		programInfoLength := tableInfo.ProgamInfoLength & 0x0FFF
+
+		paddingBytes := programInfoLength
+		offset := 0
+
+		for offset < tableEnd {
+			for paddingBytes > 0 {
+				var pad uint8
+				err = binary.Read(r, binary.BigEndian, &pad)
+				if err != nil {
+					return false
+				}
+				paddingBytes = paddingBytes - 1
+				offset = offset + 1
+			}
+			var program struct {
+				StreamType uint8
+				PID        uint16
+				Next       uint16
+			}
+			err = binary.Read(r, binary.BigEndian, &program)
+			if err != nil {
+				return false
+			}
+			offset = offset + 5
+
+			paddingBytes = program.Next & 0x0FFF
+			pid := program.PID & 0x1FFF
+
+			switch program.StreamType {
+			case H264StreamType:
+				p.transportPacket.Pmt.Videoh264 = append(p.transportPacket.Pmt.Videoh264, pid)
+			case ADTSStreamType:
+				p.transportPacket.Pmt.AudioADTS = append(p.transportPacket.Pmt.AudioADTS, pid)
+			default:
+				p.transportPacket.Pmt.Other = append(p.transportPacket.Pmt.Other, pid)
+			}
+
+			p.transportPacket.Pmt.valid = true
+		}
+	}
+
 	p.transportPacket.valid = true
 
 	return true
@@ -241,6 +378,33 @@ func (p *TsPacket) GetPCRS() (PCRs float64) {
 	return
 }
 
+// GetPATdata Gets the PAT info if present (so PMT PID)
+func (p *TsPacket) GetPATdata() (PMTPID int) {
+	PMTPID = -1
+	if !p.transportPacket.valid || !p.transportPacket.Pat.valid {
+		return
+	}
+
+	PMTPID = int(p.transportPacket.Pat.PmtPID)
+
+	return
+}
+
+// GetPMTdata Gets the PMT dta if present (video, audios, and other PIDs)
+func (p *TsPacket) GetPMTdata() (valid bool, Videoh264 []uint16, AudioADTS []uint16, Other []uint16) {
+	valid = false
+	if !p.transportPacket.valid || !p.transportPacket.Pmt.valid {
+		return
+	}
+
+	Videoh264 = p.transportPacket.Pmt.Videoh264
+	AudioADTS = p.transportPacket.Pmt.AudioADTS
+	Other = p.transportPacket.Pmt.Other
+	valid = true
+
+	return
+}
+
 // GetPID Adds bytes to the packet
 func (p *TsPacket) GetPID() (pID int) {
 	pID = -1
@@ -253,8 +417,8 @@ func (p *TsPacket) GetPID() (pID int) {
 	return
 }
 
-// ToString retuns packet data in string form
-func (p *TsPacket) ToString() string {
+// String retuns packet data in string form
+func (p *TsPacket) String() string {
 	ret := ""
 	if !p.transportPacket.valid {
 		return ret
