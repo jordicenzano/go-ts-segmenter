@@ -58,6 +58,10 @@ func main() {
 		n, err := r.Read(buf[:cap(buf)])
 		if n == 0 && err == io.EOF {
 			// Detected EOF
+			// Closing
+			log.Info("Closing process detected EOF")
+			mg.Close()
+
 			break
 		}
 

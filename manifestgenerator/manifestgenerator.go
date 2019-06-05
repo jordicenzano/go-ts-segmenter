@@ -23,6 +23,11 @@ const (
 	LiveWindow
 )
 
+const (
+	// ChunkLengthToleranceS Tolerance calculationg chunk length
+	ChunkLengthToleranceS = 0.25
+)
+
 type options struct {
 	log                *logrus.Logger
 	isCreatingChunks   bool
@@ -43,10 +48,16 @@ type ManifestGenerator struct {
 	// Internal parsing data
 	isInSync        bool
 	bytesToNextSync int
-	tsPacket        tspacket.TsPacket
 
-	//TODO: del
-	processedPackets int
+	// Current TS packet data
+	tsPacket tspacket.TsPacket
+
+	// Time counters
+	chunkStartTimeS float64
+	lastPCRs        float64
+
+	// Packet counter
+	processedPackets uint64
 }
 
 // New Creates a chunklistgenerator instance
@@ -55,7 +66,7 @@ func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBas
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
-	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, tspacket.New(tspacket.TsDefaultPacketSize), 0}
+	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0}
 	return e
 }
 
@@ -92,7 +103,7 @@ func min(a, b int) int {
 	return b
 }
 
-func (mg *ManifestGenerator) processPacket() bool {
+func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	if !mg.tsPacket.Parse() {
 		return false
 	}
@@ -100,7 +111,19 @@ func (mg *ManifestGenerator) processPacket() bool {
 	pID := mg.tsPacket.GetPID()
 	if pID == mg.options.videoPID {
 		mg.options.log.Debug("VIDEO: ", mg.tsPacket.ToString())
-		//TODO JOC
+		pcrS := mg.tsPacket.GetPCRS()
+		if pcrS >= 0 {
+			mg.lastPCRs = pcrS
+		}
+
+		if mg.chunkStartTimeS < 0 && pcrS >= 0 {
+			mg.chunkStartTimeS = pcrS
+		}
+		durS := pcrS - mg.chunkStartTimeS
+		if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
+			//TODO: JOC Caclulate rollover
+			mg.nextChunk(pcrS, durS)
+		}
 	} else if pID == mg.options.audioPID {
 		mg.options.log.Debug("AUDIO: ", mg.tsPacket.ToString())
 		//TODO JOC
@@ -112,6 +135,20 @@ func (mg *ManifestGenerator) processPacket() bool {
 	}
 
 	return true
+}
+
+func (mg *ManifestGenerator) nextChunk(pcrS float64, chunkDurS float64) {
+	//TODO: JOC Generate last chunk
+
+	mg.options.log.Info("CHUNK! At PCRs: ", pcrS, ". ChunkDurS: ", chunkDurS)
+
+	mg.chunkStartTimeS = pcrS
+}
+
+// Close Closes manigest processing saving last data and last chunk
+func (mg *ManifestGenerator) Close() {
+	//Generate last chunk
+	mg.nextChunk(mg.lastPCRs, mg.lastPCRs-mg.chunkStartTimeS)
 }
 
 // AddData process recived data
@@ -135,7 +172,7 @@ func (mg *ManifestGenerator) AddData(buf []byte) {
 
 	if mg.bytesToNextSync <= 0 {
 		// Process packet
-		if mg.processPacket() == false {
+		if mg.processPacket(false) == false {
 			mg.isInSync = false
 		} else {
 			mg.bytesToNextSync = tspacket.TsDefaultPacketSize
@@ -152,6 +189,6 @@ func (mg *ManifestGenerator) AddData(buf []byte) {
 	return
 }
 
-func (mg ManifestGenerator) getProcessedPackets() int {
+func (mg ManifestGenerator) getNumProcessedPackets() uint64 {
 	return mg.processedPackets
 }

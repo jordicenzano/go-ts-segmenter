@@ -24,8 +24,8 @@ func TestManifestGeneratorBasic1Pckt(t *testing.T) {
 
 	mg.AddData(pckt)
 
-	xpectednumProcPackets := 1
-	procPckts := mg.getProcessedPackets()
+	xpectednumProcPackets := uint64(1)
+	procPckts := mg.getNumProcessedPackets()
 	if procPckts != xpectednumProcPackets {
 		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
@@ -41,15 +41,15 @@ func TestManifestGeneratorBasic2Pckt(t *testing.T) {
 
 	mg.AddData(pckt)
 
-	xpectednumProcPackets := 2
-	procPckts := mg.getProcessedPackets()
+	xpectednumProcPackets := uint64(2)
+	procPckts := mg.getNumProcessedPackets()
 	if procPckts != xpectednumProcPackets {
 		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
 }
 
 func TestManifestGeneratorBasicVideoBigPackets(t *testing.T) {
-	f, err := os.Open("../fixture/test.ts")
+	f, err := os.Open("../fixture/testSmall.ts")
 	if err != nil {
 		panic("Error opening test file")
 	}
@@ -77,15 +77,15 @@ func TestManifestGeneratorBasicVideoBigPackets(t *testing.T) {
 			panic("Error reading test file")
 		}
 	}
-	xpectednumProcPackets := 14486
-	procPckts := mg.getProcessedPackets()
+	xpectednumProcPackets := uint64(1835)
+	procPckts := mg.getNumProcessedPackets()
 	if procPckts != xpectednumProcPackets {
 		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
 }
 
 func TestManifestGeneratorBasicVideoSmallPackets(t *testing.T) {
-	f, err := os.Open("../fixture/test.ts")
+	f, err := os.Open("../fixture/testSmall.ts")
 	if err != nil {
 		panic("Error opening test file")
 	}
@@ -113,8 +113,50 @@ func TestManifestGeneratorBasicVideoSmallPackets(t *testing.T) {
 			panic("Error reading test file")
 		}
 	}
-	xpectednumProcPackets := 14486
-	procPckts := mg.getProcessedPackets()
+	xpectednumProcPackets := uint64(1835)
+	procPckts := mg.getNumProcessedPackets()
+	if procPckts != xpectednumProcPackets {
+		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
+	}
+}
+
+func TestManifestGeneratorInitialResyncVideoBigPackets(t *testing.T) {
+	f, err := os.Open("../fixture/testSmall.ts")
+	if err != nil {
+		panic("Error opening test file")
+	}
+
+	mediaSourceReader := bufio.NewReader(f)
+	buf := make([]byte, 0, 4*1024) //4KB Buffers
+
+	mg := New(nil, false, ".", "chunk_", 4.0, 256, 257, LiveWindow, 3, 0)
+
+	// Start out of sync
+	n, err := mediaSourceReader.Read(buf[:cap(buf)])
+	if err != nil {
+		panic("Error reading test file")
+	}
+
+	for {
+		n, err = mediaSourceReader.Read(buf[:cap(buf)])
+		buf = buf[:n]
+		if n == 0 {
+			if err == nil {
+				continue
+			}
+			if err == io.EOF {
+				break
+			}
+		} else {
+			mg.AddData(buf)
+		}
+		// process buf
+		if err != nil && err != io.EOF {
+			panic("Error reading test file")
+		}
+	}
+	xpectednumProcPackets := uint64(1813)
+	procPckts := mg.getNumProcessedPackets()
 	if procPckts != xpectednumProcPackets {
 		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
