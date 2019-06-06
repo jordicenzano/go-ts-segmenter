@@ -46,13 +46,25 @@ type Hls struct {
 	chunks                []Chunk
 
 	chunklistFileName string
+
+	initChunkDataFileName string
 }
 
 // New Creates a hls chunklist manifest
 func New(ManifestType ManifestTypes, version int, isIndependentSegments bool, targetDurS float64, slidingWindowSize int, chunklistFileName string) Hls {
-	h := Hls{ManifestType, version, isIndependentSegments, targetDurS, slidingWindowSize, 0, 0, make([]Chunk, 0), chunklistFileName}
+	h := Hls{ManifestType, version, isIndependentSegments, targetDurS, slidingWindowSize, 0, 0, make([]Chunk, 0), chunklistFileName, ""}
 
 	return h
+}
+
+// AddInitChunk Adds a chunk init infomation
+func (p *Hls) AddInitChunk(initChunkFileName string) {
+	p.initChunkDataFileName = initChunkFileName
+}
+
+// SetHlsVersion Sets manifest version
+func (p *Hls) SetHlsVersion(version int) {
+	p.version = version
 }
 
 // AddChunk Adds a new chunk
@@ -102,14 +114,15 @@ func (p *Hls) createHlsChunklist() string {
 		buffer.WriteString("#EXT-X-PLAYLIST-TYPE:EVENT\n")
 	}
 
-	if p.version < 3 {
-		buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.0f", p.targetDurS) + "\n")
-	} else {
-		buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.8f", p.targetDurS) + "\n")
-	}
+	buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.0f", p.targetDurS) + "\n")
 
 	if p.isIndependentSegments {
 		buffer.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
+	}
+
+	if p.initChunkDataFileName != "" {
+		chunkPath, _ := filepath.Rel(path.Dir(p.chunklistFileName), p.initChunkDataFileName)
+		buffer.WriteString("#EXT-X-MAP:URI=\"" + chunkPath + "\"\n")
 	}
 
 	for _, chunk := range p.chunks {

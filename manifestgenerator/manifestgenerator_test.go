@@ -365,7 +365,7 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegment(t *testin
 #EXT-X-VERSION:3
 #EXT-X-MEDIA-SEQUENCE:1
 #EXT-X-DISCONTINUITY-SEQUENCE:0
-#EXT-X-TARGETDURATION:4.00000000
+#EXT-X-TARGETDURATION:4
 #EXT-X-INDEPENDENT-SEGMENTS
 #EXTINF:3.80000000,
 chunk_00001.ts
@@ -373,6 +373,117 @@ chunk_00001.ts
 chunk_00002.ts
 #EXTINF:0.50000000,
 chunk_00003.ts
+`
+	if manifestStr != xpectedmanifestStr {
+		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)
+	}
+}
+
+func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegmentLHLS(t *testing.T) {
+	//TODO: Very simple test, we need more controls
+	pathResults := "../results/VideoBigPacketsAutoPIDsInitStartSegmentLHLS"
+	chuklistFile := "chunklist.m3u8"
+	clearResultsDir(pathResults)
+
+	f, err := os.Open("../fixture/testSmall.ts")
+	if err != nil {
+		panic("Error opening test file")
+	}
+
+	mediaSourceReader := bufio.NewReader(f)
+	buf := make([]byte, 0, 4*1024) //4KB Buffers
+
+	mg := New(nil, mediachunk.OutputModeFile, pathResults, "chunk_", chuklistFile, 4.0, ChunkInitStart, true, -1, -1, hls.LiveWindow, 3, 3)
+
+	for {
+		n, err := mediaSourceReader.Read(buf[:cap(buf)])
+		buf = buf[:n]
+		if n == 0 {
+			if err == nil {
+				continue
+			}
+			if err == io.EOF {
+				break
+			}
+		} else {
+			mg.AddData(buf)
+		}
+		// process buf
+		if err != nil && err != io.EOF {
+			panic("Error reading test file")
+		}
+	}
+	mg.Close()
+
+	xpectednumProcPackets := uint64(1835)
+	procPckts := mg.getNumProcessedPackets()
+	if procPckts != xpectednumProcPackets {
+		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
+	}
+
+	// Check chunks
+	type fileData struct {
+		name string
+		size int64
+	}
+
+	filesData := []fileData{
+		{
+			name: path.Join(pathResults, "chunk_00000.ts"),
+			size: 98136,
+		},
+		{
+			name: path.Join(pathResults, "chunk_00001.ts"),
+			size: 103588,
+		},
+		{
+			name: path.Join(pathResults, "chunk_00002.ts"),
+			size: 108476,
+		},
+		{
+			name: path.Join(pathResults, "chunk_00003.ts"),
+			size: 17296,
+		},
+	}
+
+	for _, filesToCheck := range filesData {
+		fi, err := os.Stat(filesToCheck.name)
+		if err != nil || fi.Size() != filesToCheck.size {
+			t.Errorf("Error checking file %s, got %d bytes, expected %d bytes. Err: %v", filesToCheck.name, fi.Size(), filesToCheck.size, err)
+		}
+	}
+
+	// Check HLS chunklist
+	fileChunklistHLS, err := os.Open(path.Join(pathResults, chuklistFile))
+	if err != nil {
+		t.Errorf("Error opening HLS chunklist!, Err: %v", err)
+	}
+	defer fileChunklistHLS.Close()
+
+	manifestByte, err := ioutil.ReadAll(fileChunklistHLS)
+	if err != nil {
+		t.Errorf("Error reading HLS chunklist data!, Err: %v", err)
+	}
+
+	manifestStr := string(manifestByte)
+	xpectedmanifestStr := `#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-DISCONTINUITY-SEQUENCE:0
+#EXT-X-TARGETDURATION:4
+#EXT-X-INDEPENDENT-SEGMENTS
+#EXTINF:4.00000000,
+chunk_00000.ts
+#EXTINF:4.00000000,
+chunk_00001.ts
+#EXTINF:4.00000000,
+chunk_00002.ts
+#EXTINF:4.00000000,
+chunk_00003.ts
+#EXTINF:4.00000000,
+chunk_00004.ts
+#EXTINF:4.00000000,
+chunk_00005.ts
 `
 	if manifestStr != xpectedmanifestStr {
 		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)

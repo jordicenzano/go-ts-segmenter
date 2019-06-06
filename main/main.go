@@ -21,7 +21,7 @@ var (
 	verbose            = flag.Bool("v", false, "enable to get verbose logging")
 	baseOutPath        = flag.String("p", "./results", "Output path")
 	chunkBaseFilename  = flag.String("f", "chunk_", "Chunks base filename")
-	chunkListFilename  = flag.String("cf", "chuklist.m3u8", "Chunklist filename")
+	chunkListFilename  = flag.String("cf", "chunklist.m3u8", "Chunklist filename")
 	targetSegmentDurS  = flag.Float64("t", 4.0, "Chunk duration in seconds")
 	liveWindowSize     = flag.Int("w", 3, "Live window size in chunks")
 	lhlsAdvancedChunks = flag.Int("l", 0, "LHLS advanced chunks")
@@ -29,7 +29,7 @@ var (
 	autoPID            = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
 	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
-	chunkInitType      = flag.Int("m", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
+	chunkInitType      = flag.Int("s", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
 	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator)")
 )
 

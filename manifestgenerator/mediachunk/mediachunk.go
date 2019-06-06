@@ -109,13 +109,21 @@ func (c *Chunk) Close() {
 func (c *Chunk) AddData(buf []byte) error {
 	if c.options.OutputType == OutputModeFile {
 		if c.fileWritter != nil {
-			writtenBytes, err := c.fileWritter.Write(buf)
-			if writtenBytes != len(buf) && err != nil {
-				return err
-			}
-		}
+			totalWrittenBytes := 0
+			err := error(nil)
 
-		c.fileWritter.Flush()
+			for totalWrittenBytes < len(buf) && err == nil {
+				writtenBytes, err := c.fileWritter.Write(buf[totalWrittenBytes:])
+
+				totalWrittenBytes = totalWrittenBytes + writtenBytes
+
+				if err != nil {
+					return err
+				}
+			}
+
+			c.fileWritter.Flush()
+		}
 	}
 
 	return nil
