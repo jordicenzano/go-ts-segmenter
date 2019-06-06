@@ -14,8 +14,8 @@ import (
 // Version Indicates the package version
 var Version = "1.1.0"
 
-// HlsVersion to use
-const HlsVersion int = 3
+// HlsDefaultVersion to use
+const HlsDefaultVersion int = 3
 
 // ChunkInitTypes types indicates where to put the init data (PAT and PMT)
 type ChunkInitTypes int
@@ -112,8 +112,8 @@ type ManifestGenerator struct {
 	// Packet counter
 	processedPackets uint64
 
-	//currentChunk info
-	currentChunk      *mediachunk.Chunk
+	//currentChunks info (1 element array for HLS)
+	currentChunks     []mediachunk.Chunk
 	currentChunkIndex uint64
 
 	//currentChunk info
@@ -126,6 +126,9 @@ type ManifestGenerator struct {
 
 	//Hls generator
 	hlsChunklist hls.Hls
+
+	//initialChunkCreation Flag tha indicates the first chunk[s] has been created
+	fistChunkCreated bool
 }
 
 // New Creates a chunklistgenerator instance
@@ -188,16 +191,18 @@ func New(
 		hls.New(
 			log,
 			manifestType,
-			HlsVersion,
+			HlsDefaultVersion,
 			true,
 			targetSegmentDurS,
-			liveWindowSize,
+			liveWindowSize+lhlsAdvancedChunks,
 			chunklistFileName,
+			"",
 			hls.OutputTypes(outputType),
 			httpClient,
 			httpScheme,
 			httpHost,
 		),
+		false,
 	}
 
 	return mg
@@ -339,13 +344,15 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 
 func (mg *ManifestGenerator) addPacketToChunk() {
 
-	if mg.currentChunk == nil {
+	if mg.currentChunks == nil {
 		mg.createChunk(false)
 	}
 
-	err := mg.currentChunk.AddData(mg.tsPacket.GetBuffer())
-	if err != nil {
-		panic(err)
+	if len(mg.currentChunks) > 0 {
+		err := mg.currentChunks[0].AddData(mg.tsPacket.GetBuffer())
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -409,25 +416,46 @@ func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bo
 	return ret
 }
 
+func (mg *ManifestGenerator) hlsAddChunk(isGrowing bool, fileName string, durationS float64, isDisco bool) {
+
+	err := mg.hlsChunklist.AddChunk(hls.Chunk{IsGrowing: isGrowing, FileName: fileName, DurationS: durationS, IsDisco: isDisco}, true)
+	if err != nil {
+		mg.options.log.Error("Error generating / saving the chunklists. Err: ", err)
+	}
+}
+
 func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
 	// Close current
 
 	if isInit == false {
-		if mg.currentChunk != nil {
-			mg.currentChunk.Close()
+		if mg.currentChunks != nil && len(mg.currentChunks) > 0 {
+			currentChunk := mg.currentChunks[0]
+
+			currentChunk.Close()
+
+			if mg.options.lhlsAdvancedChunks <= 0 {
+				mg.hlsAddChunk(false, currentChunk.GetFilename(), chunkDurationS, false)
+			}
+
+			if len(mg.currentChunks) > 1 {
+				// Remove 1st element
+				mg.currentChunks = mg.currentChunks[1:]
+			} else {
+				// Empty array
+				mg.currentChunks = mg.currentChunks[:0]
+			}
+
+			mg.currentChunkIndex++
 		}
-
-		err := mg.hlsChunklist.AddChunk(hls.Chunk{IsGrowing: false, FileName: mg.currentChunk.GetFilename(), DurationS: chunkDurationS, IsDisco: false}, true)
-		if err != nil {
-			mg.options.log.Error("Error generating / saving the chunklists. Err: ", err)
-		}
-
-		mg.currentChunk = nil
-
-		mg.currentChunkIndex++
 	} else {
 		if mg.initChunk != nil {
 			mg.initChunk.Close()
+
+			mg.hlsChunklist.SetInitChunk(mg.initChunk.GetFilename())
+
+			// We need to update version 7 for map chunks
+			mg.hlsChunklist.SetHlsVersion(7)
+
 			mg.initChunk = nil
 		}
 	}
@@ -437,27 +465,22 @@ func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
 
 func (mg *ManifestGenerator) createChunk(isInit bool) {
 	// Close current
-	chunkOptions := mediachunk.Options{
-		Log:                mg.options.log,
-		OutputType:         mg.options.OutputType,
-		LHLS:               false,
-		EstimatedDurationS: mg.options.targetSegmentDurS,
-		FileNumberLength:   ChunkFileNumberLength,
-		GhostPrefix:        "",
-		FileExtension:      ChunkFileExtensionDefault,
-		BasePath:           mg.options.baseOutPath,
-		ChunkBaseFilename:  mg.options.chunkBaseFilename,
-		HttpClient:         mg.options.httpClient,
-		HttpScheme:         mg.options.httpScheme,
-		HttpHost:           mg.options.httpHost,
-	}
-
 	if isInit {
-		chunkOptions.ChunkBaseFilename = ChunkInitFileName
-		chunkOptions.EstimatedDurationS = -1
-		chunkOptions.LHLS = false
+		chunkInitOptions := mediachunk.Options{
+			Log:                mg.options.log,
+			OutputType:         mg.options.OutputType,
+			LHLS:               false,
+			EstimatedDurationS: -1,
+			FileNumberLength:   ChunkFileNumberLength,
+			GhostPrefix:        GhostPrefixDefault,
+			FileExtension:      ChunkFileExtensionDefault,
+			BasePath:           mg.options.baseOutPath,
+			ChunkBaseFilename:  ChunkInitFileName,
+			HTTPClient:         mg.options.httpClient,
+			HTTPScheme:         mg.options.httpScheme,
+			HTTPHost:           mg.options.httpHost}
 
-		newChunk := mediachunk.New(0, chunkOptions)
+		newChunk := mediachunk.New(0, chunkInitOptions)
 		mg.initChunk = &newChunk
 
 		err := mg.initChunk.InitializeChunk()
@@ -465,20 +488,54 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 			panic(err)
 		}
 	} else {
-		newChunk := mediachunk.New(mg.currentChunkIndex, chunkOptions)
-		mg.currentChunk = &newChunk
-
-		err := mg.currentChunk.InitializeChunk()
-		if err != nil {
-			panic(err)
+		chunksToCreate := 1
+		if mg.fistChunkCreated == false && mg.options.lhlsAdvancedChunks > 0 {
+			chunksToCreate = mg.options.lhlsAdvancedChunks
+			mg.fistChunkCreated = true
 		}
 
-		if mg.options.ChunkInitType == ChunkInitStart {
-			// Save PAT and PMT first if available
-			if mg.initState == InitsavedPMT {
-				mg.currentChunk.AddData(mg.tsInitPATPacket.GetBuffer())
-				mg.currentChunk.AddData(mg.tsInitPMTPacket.GetBuffer())
+		n := 0
+		for n < chunksToCreate {
+			chunkOptions := mediachunk.Options{
+				Log:                mg.options.log,
+				OutputType:         mg.options.OutputType,
+				LHLS:               false,
+				EstimatedDurationS: mg.options.targetSegmentDurS,
+				FileNumberLength:   ChunkFileNumberLength,
+				GhostPrefix:        GhostPrefixDefault,
+				FileExtension:      ChunkFileExtensionDefault,
+				BasePath:           mg.options.baseOutPath,
+				ChunkBaseFilename:  mg.options.chunkBaseFilename,
+				HTTPClient:         mg.options.httpClient,
+				HTTPScheme:         mg.options.httpScheme,
+				HTTPHost:           mg.options.httpHost}
+
+			if mg.options.lhlsAdvancedChunks > 0 {
+				chunkOptions.LHLS = true
 			}
+
+			newChunk := mediachunk.New(mg.currentChunkIndex+uint64(len(mg.currentChunks)), chunkOptions)
+
+			err := newChunk.InitializeChunk()
+			if err != nil {
+				panic(err)
+			}
+
+			if mg.options.ChunkInitType == ChunkInitStart {
+				// Save PAT and PMT first if available
+				if mg.initState == InitsavedPMT {
+					newChunk.AddData(mg.tsInitPATPacket.GetBuffer())
+					newChunk.AddData(mg.tsInitPMTPacket.GetBuffer())
+				}
+			}
+
+			if mg.options.lhlsAdvancedChunks > 0 {
+				mg.hlsAddChunk(true, newChunk.GetFilename(), mg.options.targetSegmentDurS, false)
+			}
+
+			mg.currentChunks = append(mg.currentChunks, newChunk)
+
+			n++
 		}
 	}
 	return

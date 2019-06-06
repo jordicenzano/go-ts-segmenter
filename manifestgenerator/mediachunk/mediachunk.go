@@ -24,8 +24,8 @@ const (
 	// OutputModeFile Saves chunks to file
 	OutputModeFile
 
-	// OutputModeHttp chunks to chunked streaming server
-	OutputModeHttp
+	// OutputModeHTTP chunks to chunked streaming server
+	OutputModeHTTP
 )
 
 // Options Chunking options
@@ -39,9 +39,9 @@ type Options struct {
 	FileExtension      string
 	BasePath           string
 	ChunkBaseFilename  string
-	HttpClient         *http.Client
-	HttpScheme         string
-	HttpHost           string
+	HTTPClient         *http.Client
+	HTTPScheme         string
+	HTTPHost           string
 }
 
 // Chunk Chunk class
@@ -100,7 +100,7 @@ func (c *Chunk) InitializeChunk() error {
 		}
 	}
 
-	if c.options.OutputType == OutputModeHttp {
+	if c.options.OutputType == OutputModeHTTP {
 		r, w := io.Pipe()
 		writeChan := make(chan []byte)
 		c.httpWriteChan = writeChan
@@ -109,8 +109,8 @@ func (c *Chunk) InitializeChunk() error {
 		req := &http.Request{
 			Method: "POST",
 			URL: &url.URL{
-				Scheme: c.options.HttpScheme,
-				Host:   c.options.HttpHost,
+				Scheme: c.options.HTTPScheme,
+				Host:   c.options.HTTPHost,
 				Path:   "/" + c.filename,
 			},
 			ProtoMajor:    1,
@@ -136,7 +136,7 @@ func (c *Chunk) InitializeChunk() error {
 		go func() {
 			c.options.Log.Debug("Opening connection to upload ", c.filename)
 			c.options.Log.Debug("Req: ", req)
-			_, err := c.options.HttpClient.Do(req)
+			_, err := c.options.HTTPClient.Do(req)
 
 			if err != nil {
 				c.options.Log.Error("Error uploading ", c.filename, ". Error: ", err)
@@ -165,7 +165,7 @@ func (c *Chunk) Close() {
 		}
 	}
 
-	if c.options.OutputType == OutputModeHttp {
+	if c.options.OutputType == OutputModeHTTP {
 		if c.httpWriteChan != nil {
 			close(c.httpWriteChan)
 		}
@@ -179,18 +179,24 @@ func (c *Chunk) AddData(buf []byte) error {
 	c.options.Log.Debug("Adding data to chunk ", c.filename)
 	if c.options.OutputType == OutputModeFile {
 		if c.fileWriter != nil {
-			writtenBytes, err := c.fileWriter.Write(buf)
-			if writtenBytes != len(buf) && err != nil {
-				return err
+			totalWrittenBytes := 0
+			err := error(nil)
+
+			for totalWrittenBytes < len(buf) && err == nil {
+				writtenBytes, err := c.fileWriter.Write(buf[totalWrittenBytes:])
+
+				totalWrittenBytes = totalWrittenBytes + writtenBytes
+
+				if err != nil {
+					return err
+				}
 			}
+			c.fileWriter.Flush()
 		}
-
-		c.fileWriter.Flush()
-	}
-
-	if c.options.OutputType == OutputModeHttp {
+	} else if c.options.OutputType == OutputModeHTTP {
 		if c.httpWriteChan != nil {
 			c.httpWriteChan <- buf
+			c.fileWriter.Flush()
 		}
 	}
 

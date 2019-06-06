@@ -64,6 +64,7 @@ type Hls struct {
 	dseq                  int64
 	chunks                []Chunk
 	chunklistFileName     string
+	initChunkDataFileName string
 	outputType            OutputTypes
 	httpClient            *http.Client
 	httpScheme            string
@@ -79,6 +80,7 @@ func New(
 	targetDurS float64,
 	slidingWindowSize int,
 	chunklistFileName string,
+	initChunkDataFileName string,
 	outputType OutputTypes,
 	httpClient *http.Client,
 	httpScheme string,
@@ -95,6 +97,7 @@ func New(
 		0,
 		make([]Chunk, 0),
 		chunklistFileName,
+		initChunkDataFileName,
 		outputType,
 		httpClient,
 		httpScheme,
@@ -102,6 +105,16 @@ func New(
 	}
 
 	return h
+}
+
+// SetInitChunk Adds a chunk init infomation
+func (p *Hls) SetInitChunk(initChunkFileName string) {
+	p.initChunkDataFileName = initChunkFileName
+}
+
+// SetHlsVersion Sets manifest version
+func (p *Hls) SetHlsVersion(version int) {
+	p.version = version
 }
 
 // AddChunk Adds a new chunk
@@ -178,14 +191,15 @@ func (p *Hls) String() string {
 		buffer.WriteString("#EXT-X-PLAYLIST-TYPE:EVENT\n")
 	}
 
-	if p.version < 3 {
-		buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.0f", p.targetDurS) + "\n")
-	} else {
-		buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.8f", p.targetDurS) + "\n")
-	}
+	buffer.WriteString("#EXT-X-TARGETDURATION:" + fmt.Sprintf("%.0f", p.targetDurS) + "\n")
 
 	if p.isIndependentSegments {
 		buffer.WriteString("#EXT-X-INDEPENDENT-SEGMENTS\n")
+	}
+
+	if p.initChunkDataFileName != "" {
+		chunkPath, _ := filepath.Rel(path.Dir(p.chunklistFileName), p.initChunkDataFileName)
+		buffer.WriteString("#EXT-X-MAP:URI=\"" + chunkPath + "\"\n")
 	}
 
 	for _, chunk := range p.chunks {

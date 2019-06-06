@@ -22,7 +22,7 @@ var (
 	verbose            = flag.Bool("v", false, "enable to get verbose logging")
 	baseOutPath        = flag.String("p", "./results", "Output path")
 	chunkBaseFilename  = flag.String("f", "chunk_", "Chunks base filename")
-	chunkListFilename  = flag.String("cf", "chuklist.m3u8", "Chunklist filename")
+	chunkListFilename  = flag.String("cf", "chunklist.m3u8", "Chunklist filename")
 	targetSegmentDurS  = flag.Float64("t", 4.0, "Chunk duration in seconds")
 	liveWindowSize     = flag.Int("w", 3, "Live window size in chunks")
 	lhlsAdvancedChunks = flag.Int("l", 0, "LHLS advanced chunks")
