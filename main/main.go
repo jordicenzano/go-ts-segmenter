@@ -23,10 +23,11 @@ var (
 	targetSegmentDurS  = flag.Float64("t", 4.0, "Chunk duration in seconds")
 	liveWindowSize     = flag.Int("w", 3, "Live window size in chunks")
 	lhlsAdvancedChunks = flag.Int("l", 0, "LHLS advanced chunks")
-	manifestTypeInt    = flag.Int("m", 2, "Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window")
-	//autoPID            = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
-	//videoPID           = flag.Int("vpid", -1, "Video PID to parse")
-	//audioPID           = flag.Int("apid", -1, "Audio PID to parse")
+	manifestTypeInt    = flag.Int("m", int(manifestgenerator.LiveWindow), "Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window")
+	autoPID            = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
+	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
+	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
+	chunkInitType      = flag.Int("m", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
 )
 
 func main() {
@@ -47,7 +48,12 @@ func main() {
 	log.Info(manifestgenerator.Version, logPath)
 	log.Info("Started tssegmenter", logPath)
 
-	mg := manifestgenerator.New(log, *isCreatingChunks, *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, true, -1, -1, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
+	if *autoPID == false && manifestgenerator.ChunkInitTypes(*chunkInitType) != manifestgenerator.ChunkNoIni {
+		log.Error("Manual PID mode and Chunk No ini data are not compatible")
+		os.Exit(1)
+	}
+
+	mg := manifestgenerator.New(log, *isCreatingChunks, *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
 
 	// Reader
 	r := bufio.NewReader(os.Stdin)

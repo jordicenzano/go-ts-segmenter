@@ -128,6 +128,29 @@ func New(packetSize int) TsPacket {
 	return p
 }
 
+// CloneFrom Deep clone all the packet
+func CloneFrom(srcPckt TsPacket) TsPacket {
+	pcktSize := len(srcPckt.buf)
+
+	newPckt := TsPacket{make([]byte, pcktSize), 0, *new(transportPacketData), programAddressTable{valid: false, PmtPID: 0}, programMapTable{valid: false}}
+	copy(newPckt.buf, srcPckt.buf)
+
+	// Copy all data
+	newPckt.lastIndex = srcPckt.lastIndex
+	newPckt.transportPacket = srcPckt.transportPacket
+	newPckt.pat = srcPckt.pat
+
+	newPckt.pmt.AudioADTS = make([]uint16, len(srcPckt.pmt.AudioADTS))
+	copy(newPckt.pmt.AudioADTS, srcPckt.pmt.AudioADTS)
+	newPckt.pmt.Videoh264 = make([]uint16, len(srcPckt.pmt.Videoh264))
+	copy(newPckt.pmt.Videoh264, srcPckt.pmt.Videoh264)
+	newPckt.pmt.Other = make([]uint16, len(srcPckt.pmt.Other))
+	copy(newPckt.pmt.Other, srcPckt.pmt.Other)
+	newPckt.pmt.valid = srcPckt.pmt.valid
+
+	return newPckt
+}
+
 // Reset packet
 func (p *TsPacket) Reset() {
 	p.lastIndex = 0

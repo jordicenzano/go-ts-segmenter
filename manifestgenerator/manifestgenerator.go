@@ -2,7 +2,6 @@ package manifestgenerator
 
 import (
 	"fmt"
-
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
@@ -23,6 +22,20 @@ const (
 
 	//LiveWindow Indicates a live manifest type sliding window (fixed size)
 	LiveWindow
+)
+
+// ChunkInitTypes types indicates where to put the init data (PAT and PMT)
+type ChunkInitTypes int
+
+const (
+	// ChunkNoIni Necessary if you choose manual PIDs selection
+	ChunkNoIni ChunkInitTypes = iota
+
+	//ChunkInit Creates the init segment
+	ChunkInit
+
+	//ChunkInitStart Adds PAT and PAT at each chunk start (CC will be broken)
+	ChunkInitStart
 )
 
 const (
@@ -75,6 +88,7 @@ type options struct {
 	baseOutPath        string
 	chunkBaseFilename  string
 	targetSegmentDurS  float64
+	ChunkInitType      ChunkInitTypes
 	autoPIDs           bool
 	videoPID           int
 	audioPID           int
@@ -109,16 +123,20 @@ type ManifestGenerator struct {
 	//currentChunk info
 	initChunk *mediachunk.Chunk
 	initState initStates
+
+	// Packets used to save PAT and PMT (We know we'll break TS CC). Only used in ChunkInitStart mode
+	tsInitPATPacket tspacket.TsPacket
+	tsInitPMTPacket tspacket.TsPacket
 }
 
 // New Creates a chunklistgenerator instance
-func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
+func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
 
-	mg := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni}
+	mg := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize)}
 
 	return mg
 }
@@ -154,14 +172,33 @@ func min(a, b int) int {
 func (mg *ManifestGenerator) isSavingMediaPacket() bool {
 	ret := false
 	if !mg.options.autoPIDs {
+		// Manual detection PIDs
 		ret = true
 	} else {
-		if mg.initState == InitsavedPMT {
+		if mg.options.ChunkInitType == ChunkInit || mg.options.ChunkInitType == ChunkInitStart {
+			if mg.initState == InitsavedPMT {
+				ret = true
+			}
+		} else if mg.options.ChunkInitType == ChunkNoIni {
 			ret = true
 		}
 	}
 
 	return ret
+}
+
+func (mg *ManifestGenerator) saveInitPacket(tableType packetTableTypes) bool {
+	if mg.options.ChunkInitType == ChunkInit {
+		return mg.addPacketToInitChunk(tableType)
+	} else if mg.options.ChunkInitType == ChunkInitStart {
+		if tableType == PatTable || tableType == PmtTable {
+			return mg.saveInitChunkPacket(tableType)
+		}
+
+		return false
+	}
+
+	return false
 }
 
 func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
@@ -176,7 +213,7 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 			mg.detectedPMTID = pmtID
 
 			// Save PAT
-			mg.addPacketToInitChunk(PatTable)
+			mg.saveInitPacket(PatTable)
 
 			mg.options.log.Debug("Detected PAT. PMT ID: ", pmtID)
 		}
@@ -191,7 +228,7 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 			}
 
 			// Save PMT
-			mg.addPacketToInitChunk(PmtTable)
+			mg.saveInitPacket(PmtTable)
 
 			mg.options.log.Debug("Detected PMT. VideoIDs: ", Videoh264, "AudiosIDs: ", AudioADTS, "Other: ", Other)
 		}
@@ -251,6 +288,28 @@ func (mg *ManifestGenerator) addPacketToChunk() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (mg *ManifestGenerator) saveInitChunkPacket(tableType packetTableTypes) bool {
+	ret := false
+
+	if tableType == PatTable {
+		if mg.initState == InitNotIni {
+			// Save PAT
+			mg.tsInitPATPacket = tspacket.CloneFrom(mg.tsPacket)
+			mg.initState = InitsavedPAT
+			ret = true
+		}
+	} else if tableType == PmtTable {
+		if mg.initState == InitsavedPAT {
+			// Save PMT
+			mg.tsInitPMTPacket = tspacket.CloneFrom(mg.tsPacket)
+			mg.initState = InitsavedPMT
+			ret = true
+		}
+	}
+
+	return ret
 }
 
 func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bool {
@@ -342,6 +401,14 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 		err := mg.currentChunk.InitializeChunk()
 		if err != nil {
 			panic(err)
+		}
+
+		if mg.options.ChunkInitType == ChunkInitStart {
+			// Save PAT and PMT first if available
+			if mg.initState == InitsavedPMT {
+				mg.currentChunk.AddData(mg.tsInitPATPacket.GetBuffer())
+				mg.currentChunk.AddData(mg.tsInitPMTPacket.GetBuffer())
+			}
 		}
 	}
 	return
