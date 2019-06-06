@@ -61,7 +61,20 @@ func main() {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
-	mg := manifestgenerator.New(log, mediachunk.OutputTypes(*destinationType), *baseOutPath, *chunkBaseFilename, *chunkListFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, hls.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
+	mg := manifestgenerator.New(log,
+		mediachunk.OutputTypes(*destinationType),
+		*baseOutPath,
+		*chunkBaseFilename,
+		*chunkListFilename,
+		*targetSegmentDurS,
+		manifestgenerator.ChunkInitTypes(*chunkInitType),
+		*autoPID,
+		-1,
+		-1,
+		hls.ManifestTypes(*manifestTypeInt),
+		*liveWindowSize,
+		*lhlsAdvancedChunks,
+	)
 
 	// Reader
 	r := bufio.NewReader(os.Stdin)
