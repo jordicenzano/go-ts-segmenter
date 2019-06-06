@@ -13,16 +13,16 @@ import (
 type OutputTypes int
 
 const (
-	// None No no write data
-	None OutputTypes = iota
+	// OutputModeNone No no write data
+	OutputModeNone OutputTypes = iota
 
-	// File Saves chunks to file
-	File
+	// OutputModeFile Saves chunks to file
+	OutputModeFile
 )
 
 // Options Chunking options
 type Options struct {
-	OutputTo           OutputTypes
+	OutputType         OutputTypes
 	LHLS               bool
 	EstimatedDurationS float64
 	FileNumberLength   int
@@ -57,7 +57,7 @@ func New(index uint64, options Options) Chunk {
 
 //InitializeChunk Initializes chunk
 func (c *Chunk) InitializeChunk() error {
-	if c.options.OutputTo == File {
+	if c.options.OutputType == OutputModeFile {
 		if c.filenameGhost != "" {
 			// Create ghost file
 			exists, _ := fileExists(c.filenameGhost)
@@ -89,7 +89,7 @@ func (c *Chunk) InitializeChunk() error {
 
 //Close Closes chunk
 func (c *Chunk) Close() {
-	if c.options.OutputTo == File {
+	if c.options.OutputType == OutputModeFile {
 		if c.filenameGhost != "" {
 			exists, _ := fileExists(c.filenameGhost)
 			if exists {
@@ -107,7 +107,7 @@ func (c *Chunk) Close() {
 
 //AddData Add data to chunk and flush it
 func (c *Chunk) AddData(buf []byte) error {
-	if c.options.OutputTo == File {
+	if c.options.OutputType == OutputModeFile {
 		if c.fileWritter != nil {
 			writtenBytes, err := c.fileWritter.Write(buf)
 			if writtenBytes != len(buf) && err != nil {
@@ -120,24 +120,6 @@ func (c *Chunk) AddData(buf []byte) error {
 
 	return nil
 }
-
-/*
-//AddTSPacket Add data to chunk and flush it
-func (c *Chunk) AddTSPacket(tsPckt tspacket.TsPacket) error {
-	if c.options.OutputTo == File {
-		if c.fileWritter != nil {
-			buf := tsPckt.GetBuffer()
-			writtenBytes, err := c.fileWritter.Write(buf)
-			if writtenBytes != len(buf) && err != nil {
-				return err
-			}
-		}
-
-		c.fileWritter.Flush()
-	}
-
-	return nil
-}*/
 
 func fileExists(filePath string) (bool, error) {
 	_, err := os.Stat(filePath)

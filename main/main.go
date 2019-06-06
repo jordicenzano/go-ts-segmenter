@@ -4,6 +4,7 @@ import (
 	"flag"
 
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator"
+	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/sirupsen/logrus"
 
 	"bufio"
@@ -17,7 +18,6 @@ const (
 
 var (
 	verbose            = flag.Bool("v", false, "enable to get verbose logging")
-	isCreatingChunks   = flag.Bool("c", true, "Create chunks")
 	baseOutPath        = flag.String("p", "./results", "Output path")
 	chunkBaseFilename  = flag.String("f", "chunk_", "Chunks base filename")
 	targetSegmentDurS  = flag.Float64("t", 4.0, "Chunk duration in seconds")
@@ -28,6 +28,7 @@ var (
 	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
 	chunkInitType      = flag.Int("m", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
+	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator)")
 )
 
 func main() {
@@ -53,7 +54,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	mg := manifestgenerator.New(log, *isCreatingChunks, *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
+	// Creating output dir if does not exists
+	if mediachunk.OutputTypes(*destinationType) == mediachunk.OutputModeFile {
+		os.MkdirAll(*baseOutPath, 0744)
+	}
+
+	mg := manifestgenerator.New(log, mediachunk.OutputTypes(*destinationType), *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
 
 	// Reader
 	r := bufio.NewReader(os.Stdin)

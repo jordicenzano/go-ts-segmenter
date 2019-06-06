@@ -84,7 +84,7 @@ const (
 
 type options struct {
 	log                *logrus.Logger
-	isCreatingChunks   bool
+	OutputType         mediachunk.OutputTypes
 	baseOutPath        string
 	chunkBaseFilename  string
 	targetSegmentDurS  float64
@@ -130,13 +130,13 @@ type ManifestGenerator struct {
 }
 
 // New Creates a chunklistgenerator instance
-func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
+func New(log *logrus.Logger, outputType mediachunk.OutputTypes, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
 
-	mg := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize)}
+	mg := ManifestGenerator{options{log, outputType, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize)}
 
 	return mg
 }
@@ -373,7 +373,7 @@ func (mg *ManifestGenerator) closeChunk(isInit bool) {
 func (mg *ManifestGenerator) createChunk(isInit bool) {
 	// Close current
 	chunkOptions := mediachunk.Options{
-		OutputTo:           mediachunk.File,
+		OutputType:         mg.options.OutputType,
 		LHLS:               false,
 		EstimatedDurationS: mg.options.targetSegmentDurS,
 		FileNumberLength:   ChunkFileNumberLength,
