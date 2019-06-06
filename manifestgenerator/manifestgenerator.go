@@ -2,27 +2,18 @@ package manifestgenerator
 
 import (
 	"fmt"
+	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
+	"path"
 )
 
 // Version Indicates the package version
 var Version = "1.1.0"
 
-// ManifestTypes indicates the manifest type
-type ManifestTypes int
-
-const (
-	// Vod Indicates VOD manifest
-	Vod ManifestTypes = iota
-
-	//LiveEvent Indicates a live manifest type event (always growing)
-	LiveEvent
-
-	//LiveWindow Indicates a live manifest type sliding window (fixed size)
-	LiveWindow
-)
+// HlsVersion to use
+const HlsVersion int = 3
 
 // ChunkInitTypes types indicates where to put the init data (PAT and PMT)
 type ChunkInitTypes int
@@ -92,7 +83,7 @@ type options struct {
 	autoPIDs           bool
 	videoPID           int
 	audioPID           int
-	manifestType       ManifestTypes
+	manifestType       hls.ManifestTypes
 	liveWindowSize     int
 	lhlsAdvancedChunks int
 }
@@ -127,16 +118,21 @@ type ManifestGenerator struct {
 	// Packets used to save PAT and PMT (We know we'll break TS CC). Only used in ChunkInitStart mode
 	tsInitPATPacket tspacket.TsPacket
 	tsInitPMTPacket tspacket.TsPacket
+
+	//Hls generator
+	hlsChunklist hls.Hls
 }
 
 // New Creates a chunklistgenerator instance
-func New(log *logrus.Logger, outputType mediachunk.OutputTypes, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
+func New(log *logrus.Logger, outputType mediachunk.OutputTypes, baseOutPath string, chunkBaseFilename string, chunkListFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType hls.ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
 
-	mg := ManifestGenerator{options{log, outputType, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize)}
+	chunklistFileName := path.Join(baseOutPath, chunkListFilename)
+
+	mg := ManifestGenerator{options{log, outputType, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize), hls.New(manifestType, HlsVersion, true, targetSegmentDurS, liveWindowSize, chunklistFileName)}
 
 	return mg
 }
@@ -250,9 +246,6 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 				}
 				durS := pcrS - mg.chunkStartTimeS
 				if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
-					//TODO: Chunk First param is the real chunk durartion
-					//TODO: JOC duration of chunk to HLS
-
 					_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
 
 					mg.chunkStartTimeS = nextInitialPCRS
@@ -341,7 +334,7 @@ func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bo
 		} else if tableType == PmtTable {
 			mg.initState = InitsavedPMT
 
-			mg.closeChunk(true)
+			mg.closeChunk(true, -1)
 		}
 
 		ret = true
@@ -350,14 +343,20 @@ func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bo
 	return ret
 }
 
-func (mg *ManifestGenerator) closeChunk(isInit bool) {
+func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
 	// Close current
 
 	if isInit == false {
 		if mg.currentChunk != nil {
 			mg.currentChunk.Close()
-			mg.currentChunk = nil
 		}
+
+		err := mg.hlsChunklist.AddChunk(hls.Chunk{IsGrowing: false, FileName: mg.currentChunk.GetFilename(), DurationS: chunkDurationS, IsDisco: false}, true)
+		if err != nil {
+			mg.options.log.Error("Error generating / saving the chunklists. Err: ", err)
+		}
+
+		mg.currentChunk = nil
 
 		mg.currentChunkIndex++
 	} else {
@@ -429,7 +428,7 @@ func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS floa
 
 	mg.options.log.Info("CHUNK! At PCRs: ", currentPCRS, ". ChunkDurS: ", chunkDurationS)
 
-	mg.closeChunk(false)
+	mg.closeChunk(false, chunkDurationS)
 	if !final {
 		mg.createChunk(false)
 	}

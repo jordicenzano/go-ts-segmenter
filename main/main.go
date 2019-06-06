@@ -4,6 +4,7 @@ import (
 	"flag"
 
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator"
+	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/sirupsen/logrus"
 
@@ -20,10 +21,11 @@ var (
 	verbose            = flag.Bool("v", false, "enable to get verbose logging")
 	baseOutPath        = flag.String("p", "./results", "Output path")
 	chunkBaseFilename  = flag.String("f", "chunk_", "Chunks base filename")
+	chunkListFilename  = flag.String("cf", "chuklist.m3u8", "Chunklist filename")
 	targetSegmentDurS  = flag.Float64("t", 4.0, "Chunk duration in seconds")
 	liveWindowSize     = flag.Int("w", 3, "Live window size in chunks")
 	lhlsAdvancedChunks = flag.Int("l", 0, "LHLS advanced chunks")
-	manifestTypeInt    = flag.Int("m", int(manifestgenerator.LiveWindow), "Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window")
+	manifestTypeInt    = flag.Int("m", int(hls.LiveWindow), "Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window")
 	autoPID            = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
 	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
@@ -59,7 +61,7 @@ func main() {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
-	mg := manifestgenerator.New(log, mediachunk.OutputTypes(*destinationType), *baseOutPath, *chunkBaseFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, manifestgenerator.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
+	mg := manifestgenerator.New(log, mediachunk.OutputTypes(*destinationType), *baseOutPath, *chunkBaseFilename, *chunkListFilename, *targetSegmentDurS, manifestgenerator.ChunkInitTypes(*chunkInitType), *autoPID, -1, -1, hls.ManifestTypes(*manifestTypeInt), *liveWindowSize, *lhlsAdvancedChunks)
 
 	// Reader
 	r := bufio.NewReader(os.Stdin)

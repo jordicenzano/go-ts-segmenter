@@ -121,6 +121,11 @@ func (c *Chunk) AddData(buf []byte) error {
 	return nil
 }
 
+//GetFilename Add data to chunk and flush it
+func (c *Chunk) GetFilename() string {
+	return c.filename
+}
+
 func fileExists(filePath string) (bool, error) {
 	_, err := os.Stat(filePath)
 	if err == nil {
