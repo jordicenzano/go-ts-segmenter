@@ -206,7 +206,7 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDs(t *testing.T) {
 	mediaSourceReader := bufio.NewReader(f)
 	buf := make([]byte, 0, 4*1024) //4KB Buffers
 
-	mg := New(nil, false, ".", "chunk_", 4.0, true, -1, -1, LiveWindow, 3, 0)
+	mg := New(nil, false, pathResults, "chunk_", 4.0, true, -1, -1, LiveWindow, 3, 0)
 
 	for {
 		n, err := mediaSourceReader.Read(buf[:cap(buf)])

@@ -9,7 +9,7 @@ import (
 )
 
 // Version Indicates the package version
-var Version = "1.0.2"
+var Version = "1.1.0"
 
 // ManifestTypes indicates the manifest type
 type ManifestTypes int
@@ -34,11 +34,39 @@ const (
 
 	//ChunkFileExtensionDefault default chunk extension
 	ChunkFileExtensionDefault = ".ts"
+
+	//ChunkInitFileName Init chunk filename
+	ChunkInitFileName = "init"
 )
 
 const (
 	// ChunkLengthToleranceS Tolerance calculationg chunk length
 	ChunkLengthToleranceS = 0.25
+)
+
+// packetTableTypes
+type packetTableTypes int
+
+const (
+	// PatTable PAT
+	PatTable = iota
+
+	// PmtTable PAT
+	PmtTable
+)
+
+// initState
+type initStates int
+
+const (
+	// InitNotIni no PAT / PMT saved
+	InitNotIni = iota
+
+	// InitsavedPAT PAT saved, needs PMT too
+	InitsavedPAT
+
+	// InitsavedPMT PMT and PAT saved
+	InitsavedPMT
 )
 
 type options struct {
@@ -77,6 +105,10 @@ type ManifestGenerator struct {
 	//currentChunk info
 	currentChunk      *mediachunk.Chunk
 	currentChunkIndex uint64
+
+	//currentChunk info
+	initChunk *mediachunk.Chunk
+	initState initStates
 }
 
 // New Creates a chunklistgenerator instance
@@ -85,13 +117,10 @@ func New(log *logrus.Logger, isCreatingChunks bool, baseOutPath string, chunkBas
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
-	e := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0}
-	return e
-}
 
-// Test test
-func (mg ManifestGenerator) Test() {
-	mg.options.log.Info(Version)
+	mg := ManifestGenerator{options{log, isCreatingChunks, baseOutPath, chunkBaseFilename, targetSegmentDurS, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni}
+
+	return mg
 }
 
 func (mg *ManifestGenerator) resync(buf []byte) []byte {
@@ -122,6 +151,19 @@ func min(a, b int) int {
 	return b
 }
 
+func (mg *ManifestGenerator) isSavingMediaPacket() bool {
+	ret := false
+	if !mg.options.autoPIDs {
+		ret = true
+	} else {
+		if mg.initState == InitsavedPMT {
+			ret = true
+		}
+	}
+
+	return ret
+}
+
 func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	if !mg.tsPacket.Parse(mg.detectedPMTID) {
 		return false
@@ -132,6 +174,10 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 		pmtID := mg.tsPacket.GetPATdata()
 		if pmtID >= 0 {
 			mg.detectedPMTID = pmtID
+
+			// Save PAT
+			mg.addPacketToInitChunk(PatTable)
+
 			mg.options.log.Debug("Detected PAT. PMT ID: ", pmtID)
 		}
 
@@ -144,36 +190,47 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 				mg.options.audioPID = int(AudioADTS[0])
 			}
 
+			// Save PMT
+			mg.addPacketToInitChunk(PmtTable)
+
 			mg.options.log.Debug("Detected PMT. VideoIDs: ", Videoh264, "AudiosIDs: ", AudioADTS, "Other: ", Other)
 		}
 	}
 
 	pID := mg.tsPacket.GetPID()
 	if pID == mg.options.videoPID {
-		mg.addPacketToChunk()
+		if mg.isSavingMediaPacket() {
+			mg.addPacketToChunk()
 
-		// Detect if we need to chunk it
-		mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
-		pcrS := mg.tsPacket.GetPCRS()
-		if pcrS >= 0 {
-			mg.lastPCRS = pcrS
+			// Detect if we need to chunk it
+			mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
+			pcrS := mg.tsPacket.GetPCRS()
+			if pcrS >= 0 {
+				mg.lastPCRS = pcrS
 
-			if mg.chunkStartTimeS < 0 && pcrS >= 0 {
-				mg.chunkStartTimeS = pcrS
+				if mg.chunkStartTimeS < 0 && pcrS >= 0 {
+					mg.chunkStartTimeS = pcrS
+				}
+				durS := pcrS - mg.chunkStartTimeS
+				if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
+					//TODO: Chunk First param is the real chunk durartion
+					//TODO: JOC duration of chunk to HLS
+
+					_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
+
+					mg.chunkStartTimeS = nextInitialPCRS
+				}
 			}
-			durS := pcrS - mg.chunkStartTimeS
-			if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
-				//TODO: Chunk First param is the real chunk durartion
-				//TODO: JOC duration of chunk to HLS
-
-				_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
-
-				mg.chunkStartTimeS = nextInitialPCRS
-			}
+		} else {
+			mg.options.log.Debug("SKIPPED VIDEO PACKET, not init: ", mg.tsPacket.String())
 		}
 	} else if pID == mg.options.audioPID {
-		mg.addPacketToChunk()
-		mg.options.log.Debug("AUDIO: ", mg.tsPacket.String())
+		if mg.isSavingMediaPacket() {
+			mg.addPacketToChunk()
+			mg.options.log.Debug("AUDIO: ", mg.tsPacket.String())
+		} else {
+			mg.options.log.Debug("SKIPPED AUDIO PACKET, not init: ", mg.tsPacket.String())
+		}
 	} else if pID >= 0 {
 		mg.options.log.Debug("OTHER: ", mg.tsPacket.String())
 	} else {
@@ -187,7 +244,7 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 func (mg *ManifestGenerator) addPacketToChunk() {
 
 	if mg.currentChunk == nil {
-		mg.createChunk()
+		mg.createChunk(false)
 	}
 
 	err := mg.currentChunk.AddData(mg.tsPacket.GetBuffer())
@@ -196,20 +253,65 @@ func (mg *ManifestGenerator) addPacketToChunk() {
 	}
 }
 
-func (mg *ManifestGenerator) closeChunk() {
-	// Close current
+func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bool {
+	ret := false
+	saveData := false
 
-	if mg.currentChunk != nil {
-		mg.currentChunk.Close()
-		mg.currentChunk = nil
+	if tableType == PatTable {
+		if mg.initState == InitNotIni { // We only save the 1st PAT PMT appeareance, so no dynamic updates are allowed
+			if mg.initChunk == nil {
+				// Create init chunk
+				mg.createChunk(true)
+			}
+			saveData = true
+		}
+	} else if tableType == PmtTable {
+		if mg.initState == InitsavedPAT {
+			saveData = true
+		}
 	}
 
-	mg.currentChunkIndex++
+	if saveData {
+		err := mg.initChunk.AddData(mg.tsPacket.GetBuffer())
+		if err != nil {
+			panic(err)
+		}
+
+		if tableType == PatTable {
+			mg.initState = InitsavedPAT
+		} else if tableType == PmtTable {
+			mg.initState = InitsavedPMT
+
+			mg.closeChunk(true)
+		}
+
+		ret = true
+	}
+
+	return ret
+}
+
+func (mg *ManifestGenerator) closeChunk(isInit bool) {
+	// Close current
+
+	if isInit == false {
+		if mg.currentChunk != nil {
+			mg.currentChunk.Close()
+			mg.currentChunk = nil
+		}
+
+		mg.currentChunkIndex++
+	} else {
+		if mg.initChunk != nil {
+			mg.initChunk.Close()
+			mg.initChunk = nil
+		}
+	}
 
 	return
 }
 
-func (mg *ManifestGenerator) createChunk() {
+func (mg *ManifestGenerator) createChunk(isInit bool) {
 	// Close current
 	chunkOptions := mediachunk.Options{
 		OutputTo:           mediachunk.File,
@@ -221,15 +323,27 @@ func (mg *ManifestGenerator) createChunk() {
 		BasePath:           mg.options.baseOutPath,
 		ChunkBaseFilename:  mg.options.chunkBaseFilename}
 
-	newChunk := mediachunk.New(mg.currentChunkIndex, chunkOptions)
+	if isInit {
+		chunkOptions.ChunkBaseFilename = ChunkInitFileName
+		chunkOptions.EstimatedDurationS = -1
+		chunkOptions.LHLS = false
 
-	mg.currentChunk = &newChunk
+		newChunk := mediachunk.New(0, chunkOptions)
+		mg.initChunk = &newChunk
 
-	err := mg.currentChunk.InitializeChunk()
-	if err != nil {
-		panic(err)
+		err := mg.initChunk.InitializeChunk()
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		newChunk := mediachunk.New(mg.currentChunkIndex, chunkOptions)
+		mg.currentChunk = &newChunk
+
+		err := mg.currentChunk.InitializeChunk()
+		if err != nil {
+			panic(err)
+		}
 	}
-
 	return
 }
 
@@ -248,9 +362,9 @@ func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS floa
 
 	mg.options.log.Info("CHUNK! At PCRs: ", currentPCRS, ". ChunkDurS: ", chunkDurationS)
 
-	mg.closeChunk()
+	mg.closeChunk(false)
 	if !final {
-		mg.createChunk()
+		mg.createChunk(false)
 	}
 
 	return
@@ -262,7 +376,7 @@ func (mg *ManifestGenerator) Close() {
 	mg.nextChunk(mg.lastPCRS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, true)
 }
 
-// AddData process recived data
+// AddData current chunk
 func (mg *ManifestGenerator) AddData(buf []byte) {
 	if !mg.isInSync {
 		buf = mg.resync(buf)
