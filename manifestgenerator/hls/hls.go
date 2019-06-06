@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Version Indicates the package version
@@ -26,6 +30,20 @@ const (
 	LiveWindow
 )
 
+// OutputTypes indicates the manifest type
+type OutputTypes int
+
+const (
+	// OutputModeNone No no write data
+	OutputModeNone OutputTypes = iota
+
+	// OutputModeFile Saves chunks to file
+	OutputModeFile
+
+	// OutputModeHttp chunks to chunked streaming server
+	OutputModeHttp
+)
+
 // Chunk Chunk information
 type Chunk struct {
 	IsGrowing bool
@@ -36,6 +54,7 @@ type Chunk struct {
 
 // Hls Hls chunklist
 type Hls struct {
+	log                   *logrus.Logger
 	manifestType          ManifestTypes
 	version               int
 	isIndependentSegments bool
@@ -44,13 +63,43 @@ type Hls struct {
 	mseq                  int64
 	dseq                  int64
 	chunks                []Chunk
-
-	chunklistFileName string
+	chunklistFileName     string
+	outputType            OutputTypes
+	httpClient            *http.Client
+	httpScheme            string
+	httpHost              string
 }
 
 // New Creates a hls chunklist manifest
-func New(ManifestType ManifestTypes, version int, isIndependentSegments bool, targetDurS float64, slidingWindowSize int, chunklistFileName string) Hls {
-	h := Hls{ManifestType, version, isIndependentSegments, targetDurS, slidingWindowSize, 0, 0, make([]Chunk, 0), chunklistFileName}
+func New(
+	log *logrus.Logger,
+	ManifestType ManifestTypes,
+	version int,
+	isIndependentSegments bool,
+	targetDurS float64,
+	slidingWindowSize int,
+	chunklistFileName string,
+	outputType OutputTypes,
+	httpClient *http.Client,
+	httpScheme string,
+	httpHost string,
+) Hls {
+	h := Hls{
+		log,
+		ManifestType,
+		version,
+		isIndependentSegments,
+		targetDurS,
+		slidingWindowSize,
+		0,
+		0,
+		make([]Chunk, 0),
+		chunklistFileName,
+		outputType,
+		httpClient,
+		httpScheme,
+		httpHost,
+	}
 
 	return h
 }
@@ -71,14 +120,41 @@ func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
 
 	if saveChunklist {
 		// Save chunklist file
-		hlsStr := p.createHlsChunklist()
+		hlsStr := p.String()
 
 		hlsStrByte := []byte(hlsStr)
 
-		if p.chunklistFileName != "" {
-			err := ioutil.WriteFile(p.chunklistFileName, hlsStrByte, 0644)
-			if err != nil {
-				return err
+		if p.outputType == OutputModeFile {
+			if p.chunklistFileName != "" {
+				err := ioutil.WriteFile(p.chunklistFileName, hlsStrByte, 0644)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		if p.outputType == OutputModeHttp {
+			if p.chunklistFileName != "" {
+				req := &http.Request{
+					Method: "POST",
+					URL: &url.URL{
+						Scheme: p.httpScheme,
+						Host:   p.httpHost,
+						Path:   "/" + p.chunklistFileName,
+					},
+					ProtoMajor:    1,
+					ProtoMinor:    1,
+					ContentLength: -1,
+					Body:          ioutil.NopCloser(bytes.NewReader(hlsStrByte)),
+				}
+
+				_, err := p.httpClient.Do(req)
+
+				if err != nil {
+					p.log.Error("Error uploading ", p.chunklistFileName, ". Error: ", err)
+				} else {
+					p.log.Debug("Upload of ", p.chunklistFileName, " complete")
+				}
 			}
 		}
 	}
@@ -87,7 +163,7 @@ func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
 }
 
 // addChunk Adds a new chunk
-func (p *Hls) createHlsChunklist() string {
+func (p *Hls) String() string {
 	var buffer bytes.Buffer
 
 	buffer.WriteString("#EXTM3U\n")

@@ -2,12 +2,13 @@ package manifestgenerator
 
 import (
 	"fmt"
-	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
+	"net/http"
+	"path"
 
+	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
-	"path"
 )
 
 // Version Indicates the package version
@@ -87,6 +88,9 @@ type options struct {
 	manifestType       hls.ManifestTypes
 	liveWindowSize     int
 	lhlsAdvancedChunks int
+	httpClient         *http.Client
+	httpScheme         string
+	httpHost           string
 }
 
 // ManifestGenerator Creates the manifest and chunks the media
@@ -139,6 +143,9 @@ func New(
 	manifestType hls.ManifestTypes,
 	liveWindowSize int,
 	lhlsAdvancedChunks int,
+	httpClient *http.Client,
+	httpScheme string,
+	httpHost string,
 ) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
@@ -161,6 +168,9 @@ func New(
 			manifestType,
 			liveWindowSize,
 			lhlsAdvancedChunks,
+			httpClient,
+			httpScheme,
+			httpHost,
 		},
 		false,
 		0,
@@ -175,7 +185,19 @@ func New(
 		InitNotIni,
 		tspacket.New(tspacket.TsDefaultPacketSize),
 		tspacket.New(tspacket.TsDefaultPacketSize),
-		hls.New(manifestType, HlsVersion, true, targetSegmentDurS, liveWindowSize, chunklistFileName),
+		hls.New(
+			log,
+			manifestType,
+			HlsVersion,
+			true,
+			targetSegmentDurS,
+			liveWindowSize,
+			chunklistFileName,
+			hls.OutputTypes(outputType),
+			httpClient,
+			httpScheme,
+			httpHost,
+		),
 	}
 
 	return mg
@@ -416,14 +438,19 @@ func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
 func (mg *ManifestGenerator) createChunk(isInit bool) {
 	// Close current
 	chunkOptions := mediachunk.Options{
+		Log:                mg.options.log,
 		OutputType:         mg.options.OutputType,
 		LHLS:               false,
 		EstimatedDurationS: mg.options.targetSegmentDurS,
 		FileNumberLength:   ChunkFileNumberLength,
-		GhostPrefix:        GhostPrefixDefault,
+		GhostPrefix:        "",
 		FileExtension:      ChunkFileExtensionDefault,
 		BasePath:           mg.options.baseOutPath,
-		ChunkBaseFilename:  mg.options.chunkBaseFilename}
+		ChunkBaseFilename:  mg.options.chunkBaseFilename,
+		HttpClient:         mg.options.httpClient,
+		HttpScheme:         mg.options.httpScheme,
+		HttpHost:           mg.options.httpHost,
+	}
 
 	if isInit {
 		chunkOptions.ChunkBaseFilename = ChunkInitFileName

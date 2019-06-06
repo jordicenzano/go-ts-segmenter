@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"net/http"
 
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
@@ -29,8 +30,10 @@ var (
 	autoPID            = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
 	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
-	chunkInitType      = flag.Int("m", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
-	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator)")
+	chunkInitType      = flag.Int("i", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
+	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer)")
+	httpScheme         = flag.String("s", "http", "HTTP Scheme (http, https)")
+	httpHost           = flag.String("h", "localhost:9094", "HTTP Host")
 )
 
 func main() {
@@ -61,6 +64,12 @@ func main() {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
+	tr := http.DefaultTransport
+	client := http.Client{
+		Transport: tr,
+		Timeout:   0,
+	}
+
 	mg := manifestgenerator.New(log,
 		mediachunk.OutputTypes(*destinationType),
 		*baseOutPath,
@@ -74,6 +83,9 @@ func main() {
 		hls.ManifestTypes(*manifestTypeInt),
 		*liveWindowSize,
 		*lhlsAdvancedChunks,
+		&client,
+		*httpScheme,
+		*httpHost,
 	)
 
 	// Reader

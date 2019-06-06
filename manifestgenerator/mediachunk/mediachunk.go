@@ -3,10 +3,15 @@ package mediachunk
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
+
+	"github.com/sirupsen/logrus"
 )
 
 // OutputTypes indicates the manifest type
@@ -18,10 +23,14 @@ const (
 
 	// OutputModeFile Saves chunks to file
 	OutputModeFile
+
+	// OutputModeHttp chunks to chunked streaming server
+	OutputModeHttp
 )
 
 // Options Chunking options
 type Options struct {
+	Log                *logrus.Logger
 	OutputType         OutputTypes
 	LHLS               bool
 	EstimatedDurationS float64
@@ -30,13 +39,20 @@ type Options struct {
 	FileExtension      string
 	BasePath           string
 	ChunkBaseFilename  string
+	HttpClient         *http.Client
+	HttpScheme         string
+	HttpHost           string
 }
 
 // Chunk Chunk class
 type Chunk struct {
-	fileWritter    *bufio.Writer
+	fileWriter     *bufio.Writer
 	fileDescriptor *os.File
-	options        Options
+
+	httpWriteChan chan<- []byte
+	httpReq       *http.Request
+
+	options Options
 
 	index         uint64
 	filename      string
@@ -45,7 +61,7 @@ type Chunk struct {
 
 // New Creates a chunk instance
 func New(index uint64, options Options) Chunk {
-	c := Chunk{nil, nil, options, index, "", ""}
+	c := Chunk{nil, nil, nil, nil, options, index, "", ""}
 
 	c.filename = c.createFilename(options.BasePath, options.ChunkBaseFilename, index, options.FileNumberLength, options.FileExtension, "")
 	if options.GhostPrefix != "" {
@@ -79,9 +95,55 @@ func (c *Chunk) InitializeChunk() error {
 					return err
 				}
 
-				c.fileWritter = bufio.NewWriter(c.fileDescriptor)
+				c.fileWriter = bufio.NewWriter(c.fileDescriptor)
 			}
 		}
+	}
+
+	if c.options.OutputType == OutputModeHttp {
+		r, w := io.Pipe()
+		writeChan := make(chan []byte)
+		c.httpWriteChan = writeChan
+
+		// open request
+		req := &http.Request{
+			Method: "POST",
+			URL: &url.URL{
+				Scheme: c.options.HttpScheme,
+				Host:   c.options.HttpHost,
+				Path:   "/" + c.filename,
+			},
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: -1,
+			Body:          r,
+		}
+
+		c.httpReq = req
+
+		go func() {
+			defer w.Close()
+
+			for buf := range writeChan {
+				n, err := w.Write(buf)
+				c.options.Log.Debug("Wrote ", n, " bytes to chunk ", c.filename)
+				if n != len(buf) && err != nil {
+					panic(err)
+				}
+			}
+		}()
+
+		go func() {
+			c.options.Log.Debug("Opening connection to upload ", c.filename)
+			c.options.Log.Debug("Req: ", req)
+			_, err := c.options.HttpClient.Do(req)
+
+			if err != nil {
+				c.options.Log.Error("Error uploading ", c.filename, ". Error: ", err)
+			} else {
+				c.options.Log.Debug("Upload of ", c.filename, " complete")
+			}
+		}()
 	}
 
 	return nil
@@ -89,6 +151,7 @@ func (c *Chunk) InitializeChunk() error {
 
 //Close Closes chunk
 func (c *Chunk) Close() {
+	c.options.Log.Debug("Closing chunk ", c.filename)
 	if c.options.OutputType == OutputModeFile {
 		if c.filenameGhost != "" {
 			exists, _ := fileExists(c.filenameGhost)
@@ -97,8 +160,14 @@ func (c *Chunk) Close() {
 			}
 		}
 
-		if c.fileWritter != nil {
+		if c.fileWriter != nil {
 			c.fileDescriptor.Close()
+		}
+	}
+
+	if c.options.OutputType == OutputModeHttp {
+		if c.httpWriteChan != nil {
+			close(c.httpWriteChan)
 		}
 	}
 
@@ -107,15 +176,22 @@ func (c *Chunk) Close() {
 
 //AddData Add data to chunk and flush it
 func (c *Chunk) AddData(buf []byte) error {
+	c.options.Log.Debug("Adding data to chunk ", c.filename)
 	if c.options.OutputType == OutputModeFile {
-		if c.fileWritter != nil {
-			writtenBytes, err := c.fileWritter.Write(buf)
+		if c.fileWriter != nil {
+			writtenBytes, err := c.fileWriter.Write(buf)
 			if writtenBytes != len(buf) && err != nil {
 				return err
 			}
 		}
 
-		c.fileWritter.Flush()
+		c.fileWriter.Flush()
+	}
+
+	if c.options.OutputType == OutputModeHttp {
+		if c.httpWriteChan != nil {
+			c.httpWriteChan <- buf
+		}
 	}
 
 	return nil
