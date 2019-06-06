@@ -137,7 +137,14 @@ func padNumberWithZero(value uint64, numZeros int) string {
 	return fmt.Sprintf(format, value)
 }
 
-func (c *Chunk) createFilename(basePath string, chunkBaseFilename string, index uint64, fileNumberLength int, fileExtension string, ghostPrefix string) string {
+func (c *Chunk) createFilename(
+	basePath string,
+	chunkBaseFilename string,
+	index uint64,
+	fileNumberLength int,
+	fileExtension string,
+	ghostPrefix string,
+) string {
 	ret := ""
 	if ghostPrefix != "" {
 		ret = path.Join(basePath, ghostPrefix+chunkBaseFilename+padNumberWithZero(index, fileNumberLength)+fileExtension)

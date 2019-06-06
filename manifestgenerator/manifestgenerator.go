@@ -2,6 +2,7 @@ package manifestgenerator
 
 import (
 	"fmt"
+
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/sirupsen/logrus"
@@ -130,13 +131,54 @@ type ManifestGenerator struct {
 }
 
 // New Creates a chunklistgenerator instance
-func New(log *logrus.Logger, outputType mediachunk.OutputTypes, baseOutPath string, chunkBaseFilename string, targetSegmentDurS float64, chunkInitType ChunkInitTypes, autoPIDs bool, videoPID int, audioPID int, manifestType ManifestTypes, liveWindowSize int, lhlsAdvancedChunks int) ManifestGenerator {
+func New(
+	log *logrus.Logger,
+	outputType mediachunk.OutputTypes,
+	baseOutPath string,
+	chunkBaseFilename string,
+	targetSegmentDurS float64,
+	chunkInitType ChunkInitTypes,
+	autoPIDs bool,
+	videoPID int,
+	audioPID int,
+	manifestType ManifestTypes,
+	liveWindowSize int,
+	lhlsAdvancedChunks int,
+) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
 		log.SetLevel(logrus.DebugLevel)
 	}
 
-	mg := ManifestGenerator{options{log, outputType, baseOutPath, chunkBaseFilename, targetSegmentDurS, chunkInitType, autoPIDs, videoPID, audioPID, manifestType, liveWindowSize, lhlsAdvancedChunks}, false, 0, -1, tspacket.New(tspacket.TsDefaultPacketSize), -1.0, -1.0, 0, nil, 0, nil, InitNotIni, tspacket.New(tspacket.TsDefaultPacketSize), tspacket.New(tspacket.TsDefaultPacketSize)}
+	mg := ManifestGenerator{
+		options{
+			log,
+			outputType,
+			baseOutPath,
+			chunkBaseFilename,
+			targetSegmentDurS,
+			chunkInitType,
+			autoPIDs,
+			videoPID,
+			audioPID,
+			manifestType,
+			liveWindowSize,
+			lhlsAdvancedChunks,
+		},
+		false,
+		0,
+		-1,
+		tspacket.New(tspacket.TsDefaultPacketSize),
+		-1.0,
+		-1.0,
+		0,
+		nil,
+		0,
+		nil,
+		InitNotIni,
+		tspacket.New(tspacket.TsDefaultPacketSize),
+		tspacket.New(tspacket.TsDefaultPacketSize),
+	}
 
 	return mg
 }
