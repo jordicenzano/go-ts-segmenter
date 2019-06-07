@@ -304,8 +304,9 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	pID := mg.tsPacket.GetPID()
 	if pID == mg.options.videoPID {
 		if mg.isSavingMediaPacket() {
+			// Detect if we need to chunk it
+			// It will chunk if detect an IDR point with PCR data
 			if mg.tsPacket.IsRandomAccess(mg.options.videoPID) == true {
-				// Detect if we need to chunk it
 				mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
 				pcrS := mg.tsPacket.GetPCRS()
 				if pcrS >= 0 {

@@ -252,19 +252,15 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitSegment(t *testing.T) 
 		},
 		{
 			name: path.Join(pathResults, "chunk_00000.ts"),
-			size: 97760,
+			size: 103024,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00001.ts"),
-			size: 103212,
+			size: 108288,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00002.ts"),
-			size: 108100,
-		},
-		{
-			name: path.Join(pathResults, "chunk_00003.ts"),
-			size: 16920,
+			size: 114680,
 		},
 	}
 
@@ -427,19 +423,31 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegmentLHLS(t *te
 	filesData := []fileData{
 		{
 			name: path.Join(pathResults, "chunk_00000.ts"),
-			size: 98136,
+			size: 103400,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00001.ts"),
-			size: 103588,
+			size: 108664,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00002.ts"),
-			size: 108476,
+			size: 115056,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00003.ts"),
-			size: 17296,
+			size: 376,
+		},
+		{
+			name: path.Join(pathResults, "chunk_00004.ts"),
+			size: 376,
+		},
+		{
+			name: path.Join(pathResults, ".growing_chunk_00003.ts"),
+			size: 0,
+		},
+		{
+			name: path.Join(pathResults, ".growing_chunk_00004.ts"),
+			size: 0,
 		},
 	}
 
@@ -479,8 +487,6 @@ chunk_00002.ts
 chunk_00003.ts
 #EXTINF:4.00000000,
 chunk_00004.ts
-#EXTINF:4.00000000,
-chunk_00005.ts
 `
 	if manifestStr != xpectedmanifestStr {
 		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)
