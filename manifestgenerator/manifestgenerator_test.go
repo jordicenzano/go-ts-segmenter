@@ -326,19 +326,15 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegment(t *testin
 	filesData := []fileData{
 		{
 			name: path.Join(pathResults, "chunk_00000.ts"),
-			size: 98136,
+			size: 103400,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00001.ts"),
-			size: 103588,
+			size: 108664,
 		},
 		{
 			name: path.Join(pathResults, "chunk_00002.ts"),
-			size: 108476,
-		},
-		{
-			name: path.Join(pathResults, "chunk_00003.ts"),
-			size: 17296,
+			size: 115056,
 		},
 	}
 
@@ -364,16 +360,16 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegment(t *testin
 	manifestStr := string(manifestByte)
 	xpectedmanifestStr := `#EXTM3U
 #EXT-X-VERSION:3
-#EXT-X-MEDIA-SEQUENCE:1
+#EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-DISCONTINUITY-SEQUENCE:0
 #EXT-X-TARGETDURATION:4
 #EXT-X-INDEPENDENT-SEGMENTS
-#EXTINF:3.80000000,
+#EXTINF:4.00000000,
+chunk_00000.ts
+#EXTINF:4.00000000,
 chunk_00001.ts
-#EXTINF:3.80000000,
+#EXTINF:2.00000000,
 chunk_00002.ts
-#EXTINF:0.50000000,
-chunk_00003.ts
 `
 	if manifestStr != xpectedmanifestStr {
 		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)

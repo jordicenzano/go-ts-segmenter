@@ -304,24 +304,26 @@ func (mg *ManifestGenerator) processPacket(forceChunk bool) bool {
 	pID := mg.tsPacket.GetPID()
 	if pID == mg.options.videoPID {
 		if mg.isSavingMediaPacket() {
-			mg.addPacketToChunk()
+			if mg.tsPacket.IsRandomAccess(mg.options.videoPID) == true {
+				// Detect if we need to chunk it
+				mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
+				pcrS := mg.tsPacket.GetPCRS()
+				if pcrS >= 0 {
+					mg.lastPCRS = pcrS
 
-			// Detect if we need to chunk it
-			mg.options.log.Debug("VIDEO: ", mg.tsPacket.String())
-			pcrS := mg.tsPacket.GetPCRS()
-			if pcrS >= 0 {
-				mg.lastPCRS = pcrS
+					if mg.chunkStartTimeS < 0 && pcrS >= 0 {
+						mg.chunkStartTimeS = pcrS
+					}
+					durS := pcrS - mg.chunkStartTimeS
+					if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
+						_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
 
-				if mg.chunkStartTimeS < 0 && pcrS >= 0 {
-					mg.chunkStartTimeS = pcrS
-				}
-				durS := pcrS - mg.chunkStartTimeS
-				if (durS + ChunkLengthToleranceS) > mg.options.targetSegmentDurS {
-					_, nextInitialPCRS := mg.nextChunk(pcrS, mg.chunkStartTimeS, tspacket.MaxPCRSValue, false)
-
-					mg.chunkStartTimeS = nextInitialPCRS
+						mg.chunkStartTimeS = nextInitialPCRS
+					}
 				}
 			}
+			mg.addPacketToChunk()
+
 		} else {
 			mg.options.log.Debug("SKIPPED VIDEO PACKET, not init: ", mg.tsPacket.String())
 		}
