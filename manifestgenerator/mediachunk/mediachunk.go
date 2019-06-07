@@ -196,7 +196,6 @@ func (c *Chunk) AddData(buf []byte) error {
 	} else if c.options.OutputType == OutputModeHTTP {
 		if c.httpWriteChan != nil {
 			c.httpWriteChan <- buf
-			c.fileWriter.Flush()
 		}
 	}
 

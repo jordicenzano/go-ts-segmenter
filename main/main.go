@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 )
@@ -34,22 +35,13 @@ var (
 	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer)")
 	httpScheme         = flag.String("s", "http", "HTTP Scheme (http, https)")
 	httpHost           = flag.String("h", "localhost:9094", "HTTP Host")
+	logPath            = flag.String("lp", "./logs/segmenter.log", "HTTP Host")
 )
 
 func main() {
 	flag.Parse()
 
-	var log = logrus.New()
-	if *verbose {
-		log.SetLevel(logrus.DebugLevel)
-	}
-	// TODO better path
-	logPath := "./logs/server.log"
-
-	Formatter := new(logrus.JSONFormatter)
-	Formatter.TimestampFormat = "01-01-2001 13:00:00"
-	log.SetFormatter(Formatter)
-	log.SetFormatter(&logrus.JSONFormatter{})
+	var log = configureLogger(*verbose, *logPath)
 
 	log.Info(manifestgenerator.Version, logPath)
 	log.Info("Started tssegmenter", logPath)
@@ -119,4 +111,32 @@ func main() {
 	log.Info("Exit because detected EOF in the input pipe")
 
 	os.Exit(0)
+}
+
+func configureLogger(verbose bool, logPath string) *logrus.Logger {
+	// TODO reuse parts of https://github.com/zencoder/fabric-common/tree/master/logger ??
+
+	var log = logrus.New()
+	if verbose {
+		log.SetLevel(logrus.DebugLevel)
+	}
+
+	formatter := new(logrus.JSONFormatter)
+	formatter.TimestampFormat = "01-01-2001 13:00:00"
+
+	log.SetFormatter(formatter)
+	log.SetFormatter(&logrus.JSONFormatter{})
+
+	// TODO close on server shutdown or exit (onExit() or hook?)
+	f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		fmt.Printf(fmt.Sprintf("Unable to open log file at: %s, error: %v", logPath, err))
+		os.Exit(-1)
+	}
+
+	// TESTING - write to both file and stdout for now
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+
+	return log
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"testing"
@@ -490,5 +491,54 @@ chunk_00004.ts
 `
 	if manifestStr != xpectedmanifestStr {
 		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)
+	}
+}
+
+//TODO: Added HTTP test needs more work
+func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegmentToHTTP(t *testing.T) {
+	pathResults := "../results/VideoBigPacketsAutoPIDsInitStartSegmentToHTTP"
+	chunklistFile := "chunklist.m3u8"
+	clearResultsDir(pathResults)
+
+	f, err := os.Open("../fixture/testSmall.ts")
+	if err != nil {
+		panic("Error opening test file")
+	}
+
+	mediaSourceReader := bufio.NewReader(f)
+	buf := make([]byte, 0, 4*1024) //4KB Buffers
+
+	tr := http.DefaultTransport
+	client := http.Client{
+		Transport: tr,
+		Timeout:   0,
+	}
+
+	mg := New(nil, mediachunk.OutputModeHTTP, pathResults, "chunk_", chunklistFile, 4.0, ChunkInitStart, true, -1, -1, hls.LiveWindow, 3, 0, &client, "http", "localhost:9094")
+
+	for {
+		n, err := mediaSourceReader.Read(buf[:cap(buf)])
+		buf = buf[:n]
+		if n == 0 {
+			if err == nil {
+				continue
+			}
+			if err == io.EOF {
+				break
+			}
+		} else {
+			mg.AddData(buf)
+		}
+		// process buf
+		if err != nil && err != io.EOF {
+			panic("Error reading test file")
+		}
+	}
+	mg.Close()
+
+	xpectednumProcPackets := uint64(1835)
+	procPckts := mg.getNumProcessedPackets()
+	if procPckts != xpectednumProcPackets {
+		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
 }
