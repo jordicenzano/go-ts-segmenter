@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"testing"
@@ -494,6 +493,7 @@ chunk_00004.ts
 	}
 }
 
+/*
 //TODO: Added HTTP test needs more work
 func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegmentToHTTP(t *testing.T) {
 	pathResults := "../results/VideoBigPacketsAutoPIDsInitStartSegmentToHTTP"
@@ -541,4 +541,4 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegmentToHTTP(t *
 	if procPckts != xpectednumProcPackets {
 		t.Errorf("Processed packet number is incorrect, got: %d, want: %d.", procPckts, xpectednumProcPackets)
 	}
-}
+}*/

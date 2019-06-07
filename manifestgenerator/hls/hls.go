@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -159,6 +160,13 @@ func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
 					ProtoMinor:    1,
 					ContentLength: -1,
 					Body:          ioutil.NopCloser(bytes.NewReader(hlsStrByte)),
+					Header:        http.Header{},
+				}
+
+				if strings.ToLower(path.Ext(p.chunklistFileName)) == ".ts" {
+					req.Header.Set("Content-Type", "video/MP2T")
+				} else if strings.ToLower(path.Ext(p.chunklistFileName)) == ".m3u8" {
+					req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
 				}
 
 				_, err := p.httpClient.Do(req)
