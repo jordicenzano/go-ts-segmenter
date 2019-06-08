@@ -6,7 +6,7 @@ This segmenter also implements "periscope" LHLS mode [LHLS](https://medium.com/@
 
 This code is not designed to be used in any production workflow, it has been created as a learning GoLang exercise.
 
-TODO PIC
+![Block diagram goes here](./pics/blockDiagramGoSegmenter.png "Block diagram")
 
 # Usage
 ## Instalation

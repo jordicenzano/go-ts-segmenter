@@ -1,0 +1,5 @@
+---
+package: github.com/zencoder/alive-go-streaming-poc
+import:
+  - package: github.com/sirupsen/logrus
+    version: master
