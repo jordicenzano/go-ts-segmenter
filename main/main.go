@@ -32,7 +32,7 @@ var (
 	videoPID           = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID           = flag.Int("apid", -1, "Audio PID to parse")
 	chunkInitType      = flag.Int("i", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
-	destinationType    = flag.Int("d", int(mediachunk.OutputModeFile), "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer)")
+	destinationType    = flag.Int("d", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer)")
 	httpScheme         = flag.String("s", "http", "HTTP Scheme (http, https)")
 	httpHost           = flag.String("h", "localhost:9094", "HTTP Host")
 	logPath            = flag.String("lp", "./logs/segmenter.log", "HTTP Host")
@@ -51,8 +51,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	chunkOutputType := mediachunk.OutputTypes(*destinationType)
+	hlsOutputType := hls.OutputTypes(*destinationType)
+
 	// Creating output dir if does not exists
-	if mediachunk.OutputTypes(*destinationType) == mediachunk.OutputModeFile {
+	if chunkOutputType == mediachunk.ChunkOutputModeFile || hlsOutputType == hls.HlsOutputModeFile {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
@@ -63,7 +66,8 @@ func main() {
 	}
 
 	mg := manifestgenerator.New(log,
-		mediachunk.OutputTypes(*destinationType),
+		chunkOutputType,
+		hlsOutputType,
 		*baseOutPath,
 		*chunkBaseFilename,
 		*chunkListFilename,
@@ -114,8 +118,6 @@ func main() {
 }
 
 func configureLogger(verbose bool, logPath string) *logrus.Logger {
-	// TODO reuse parts of https://github.com/zencoder/fabric-common/tree/master/logger ??
-
 	var log = logrus.New()
 	if verbose {
 		log.SetLevel(logrus.DebugLevel)
@@ -127,7 +129,6 @@ func configureLogger(verbose bool, logPath string) *logrus.Logger {
 	log.SetFormatter(formatter)
 	log.SetFormatter(&logrus.JSONFormatter{})
 
-	// TODO close on server shutdown or exit (onExit() or hook?)
 	f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		fmt.Printf(fmt.Sprintf("Unable to open log file at: %s, error: %v", logPath, err))

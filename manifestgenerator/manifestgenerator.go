@@ -77,11 +77,12 @@ const (
 
 type options struct {
 	log                *logrus.Logger
-	OutputType         mediachunk.OutputTypes
+	chunkOutputType    mediachunk.OutputTypes
+	manifestOutputType hls.OutputTypes
 	baseOutPath        string
 	chunkBaseFilename  string
 	targetSegmentDurS  float64
-	ChunkInitType      ChunkInitTypes
+	chunkInitType      ChunkInitTypes
 	autoPIDs           bool
 	videoPID           int
 	audioPID           int
@@ -134,7 +135,8 @@ type ManifestGenerator struct {
 // New Creates a chunklistgenerator instance
 func New(
 	log *logrus.Logger,
-	outputType mediachunk.OutputTypes,
+	chunkOutputType mediachunk.OutputTypes,
+	manifestOutputType hls.OutputTypes,
 	baseOutPath string,
 	chunkBaseFilename string,
 	chunkListFilename string,
@@ -160,7 +162,8 @@ func New(
 	mg := ManifestGenerator{
 		options{
 			log,
-			outputType,
+			chunkOutputType,
+			manifestOutputType,
 			baseOutPath,
 			chunkBaseFilename,
 			targetSegmentDurS,
@@ -197,7 +200,7 @@ func New(
 			liveWindowSize+lhlsAdvancedChunks,
 			chunklistFileName,
 			"",
-			hls.OutputTypes(outputType),
+			manifestOutputType,
 			httpClient,
 			httpScheme,
 			httpHost,
@@ -242,11 +245,11 @@ func (mg *ManifestGenerator) isSavingMediaPacket() bool {
 		// Manual detection PIDs
 		ret = true
 	} else {
-		if mg.options.ChunkInitType == ChunkInit || mg.options.ChunkInitType == ChunkInitStart {
+		if mg.options.chunkInitType == ChunkInit || mg.options.chunkInitType == ChunkInitStart {
 			if mg.initState == InitsavedPMT {
 				ret = true
 			}
-		} else if mg.options.ChunkInitType == ChunkNoIni {
+		} else if mg.options.chunkInitType == ChunkNoIni {
 			ret = true
 		}
 	}
@@ -255,9 +258,9 @@ func (mg *ManifestGenerator) isSavingMediaPacket() bool {
 }
 
 func (mg *ManifestGenerator) saveInitPacket(tableType packetTableTypes) bool {
-	if mg.options.ChunkInitType == ChunkInit {
+	if mg.options.chunkInitType == ChunkInit {
 		return mg.addPacketToInitChunk(tableType)
-	} else if mg.options.ChunkInitType == ChunkInitStart {
+	} else if mg.options.chunkInitType == ChunkInitStart {
 		if tableType == PatTable || tableType == PmtTable {
 			return mg.saveInitChunkPacket(tableType)
 		}
@@ -352,6 +355,16 @@ func (mg *ManifestGenerator) addPacketToChunk() {
 	}
 
 	if len(mg.currentChunks) > 0 {
+
+		//In case we need to save PAT and PMT do it just before the 1st packet
+		if mg.options.chunkInitType == ChunkInitStart && mg.currentChunks[0].IsEmpty() {
+			// Save PAT and PMT first if available
+			if mg.initState == InitsavedPMT {
+				mg.currentChunks[0].AddData(mg.tsInitPATPacket.GetBuffer())
+				mg.currentChunks[0].AddData(mg.tsInitPMTPacket.GetBuffer())
+			}
+		}
+
 		err := mg.currentChunks[0].AddData(mg.tsPacket.GetBuffer())
 		if err != nil {
 			panic(err)
@@ -471,7 +484,7 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 	if isInit {
 		chunkInitOptions := mediachunk.Options{
 			Log:                mg.options.log,
-			OutputType:         mg.options.OutputType,
+			OutputType:         mg.options.chunkOutputType,
 			LHLS:               false,
 			EstimatedDurationS: -1,
 			FileNumberLength:   ChunkFileNumberLength,
@@ -501,7 +514,7 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 		for n < chunksToCreate {
 			chunkOptions := mediachunk.Options{
 				Log:                mg.options.log,
-				OutputType:         mg.options.OutputType,
+				OutputType:         mg.options.chunkOutputType,
 				LHLS:               false,
 				EstimatedDurationS: mg.options.targetSegmentDurS,
 				FileNumberLength:   ChunkFileNumberLength,
@@ -524,14 +537,7 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 				panic(err)
 			}
 
-			if mg.options.ChunkInitType == ChunkInitStart {
-				// Save PAT and PMT first if available
-				if mg.initState == InitsavedPMT {
-					newChunk.AddData(mg.tsInitPATPacket.GetBuffer())
-					newChunk.AddData(mg.tsInitPMTPacket.GetBuffer())
-				}
-			}
-
+			// Add the advanced chunk to the manifest with target dur
 			if mg.options.lhlsAdvancedChunks > 0 {
 				mg.hlsAddChunk(true, newChunk.GetFilename(), mg.options.targetSegmentDurS, false)
 			}

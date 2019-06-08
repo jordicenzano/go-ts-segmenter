@@ -1,7 +1,7 @@
 # go-ts-segmenter
 
 #Tests snippets
-The following snippets works on MACOS, you should probably remove (or update) the `fontfile` path if you use another OS.
+The following snippets works on MAC OS, you should probably remove (or update) the `fontfile` path if you use another OS.
 
 Create 100m live stream with 3 advanced segments to disc (LHLS)
 ```

@@ -19,14 +19,14 @@ import (
 type OutputTypes int
 
 const (
-	// OutputModeNone No no write data
-	OutputModeNone OutputTypes = iota
+	// ChunkOutputModeNone No no write data
+	ChunkOutputModeNone OutputTypes = iota
 
-	// OutputModeFile Saves chunks to file
-	OutputModeFile
+	// ChunkOutputModeFile Saves chunks to file
+	ChunkOutputModeFile
 
-	// OutputModeHTTP chunks to chunked streaming server
-	OutputModeHTTP
+	// ChunkOutputModeHTTP chunks to chunked streaming server
+	ChunkOutputModeHTTP
 )
 
 // Options Chunking options
@@ -58,11 +58,13 @@ type Chunk struct {
 	index         uint64
 	filename      string
 	filenameGhost string
+
+	totalBytes int
 }
 
 // New Creates a chunk instance
 func New(index uint64, options Options) Chunk {
-	c := Chunk{nil, nil, nil, nil, options, index, "", ""}
+	c := Chunk{nil, nil, nil, nil, options, index, "", "", 0}
 
 	c.filename = c.createFilename(options.BasePath, options.ChunkBaseFilename, index, options.FileNumberLength, options.FileExtension, "")
 	if options.GhostPrefix != "" {
@@ -72,142 +74,183 @@ func New(index uint64, options Options) Chunk {
 	return c
 }
 
-//InitializeChunk Initializes chunk
-func (c *Chunk) InitializeChunk() error {
-	if c.options.OutputType == OutputModeFile {
-		if c.filenameGhost != "" {
-			// Create ghost file
-			exists, _ := fileExists(c.filenameGhost)
-			if !exists {
-				err := ioutil.WriteFile(c.filenameGhost, nil, 0644)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		if c.filename != "" {
-			// Create ghost file
-			exists, _ := fileExists(c.filename)
-			if !exists {
-				var err error
-				c.fileDescriptor, err = os.Create(c.filename)
-				if err != nil {
-					return err
-				}
-
-				c.fileWriter = bufio.NewWriter(c.fileDescriptor)
+func (c *Chunk) initializeChunkFile() error {
+	if c.filenameGhost != "" {
+		// Create ghost file
+		exists, _ := fileExists(c.filenameGhost)
+		if !exists {
+			err := ioutil.WriteFile(c.filenameGhost, nil, 0644)
+			if err != nil {
+				return err
 			}
 		}
 	}
 
-	if c.options.OutputType == OutputModeHTTP {
-		r, w := io.Pipe()
-		writeChan := make(chan []byte)
-		c.httpWriteChan = writeChan
-
-		// open request
-		req := &http.Request{
-			Method: "POST",
-			URL: &url.URL{
-				Scheme: c.options.HTTPScheme,
-				Host:   c.options.HTTPHost,
-				Path:   "/" + c.filename,
-			},
-			ProtoMajor:    1,
-			ProtoMinor:    1,
-			ContentLength: -1,
-			Body:          r,
-			Header:        http.Header{},
-		}
-
-		if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-			req.Header.Set("Content-Type", "video/MP2T")
-		} else if strings.ToLower(path.Ext(c.filename)) == ".m3u8" {
-			req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
-		}
-
-		c.httpReq = req
-
-		go func() {
-			defer w.Close()
-
-			for buf := range writeChan {
-				n, err := w.Write(buf)
-				c.options.Log.Debug("Wrote ", n, " bytes to chunk ", c.filename)
-				if n != len(buf) && err != nil {
-					panic(err)
-				}
-			}
-		}()
-
-		go func() {
-			c.options.Log.Debug("Opening connection to upload ", c.filename)
-			c.options.Log.Debug("Req: ", req)
-			_, err := c.options.HTTPClient.Do(req)
-
+	if c.filename != "" {
+		// Create ghost file
+		exists, _ := fileExists(c.filename)
+		if !exists {
+			var err error
+			c.fileDescriptor, err = os.Create(c.filename)
 			if err != nil {
-				c.options.Log.Error("Error uploading ", c.filename, ". Error: ", err)
-			} else {
-				c.options.Log.Debug("Upload of ", c.filename, " complete")
+				return err
 			}
-		}()
+
+			c.fileWriter = bufio.NewWriter(c.fileDescriptor)
+		}
 	}
 
 	return nil
+}
+
+func (c *Chunk) initializeChunkHTTP() error {
+	r, w := io.Pipe()
+	writeChan := make(chan []byte)
+	c.httpWriteChan = writeChan
+
+	// open request
+	req := &http.Request{
+		Method: "POST",
+		URL: &url.URL{
+			Scheme: c.options.HTTPScheme,
+			Host:   c.options.HTTPHost,
+			Path:   "/" + c.filename,
+		},
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		ContentLength: -1,
+		Body:          r,
+		Header:        http.Header{},
+	}
+
+	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
+		req.Header.Set("Content-Type", "video/MP2T")
+	}
+	c.httpReq = req
+
+	go func() {
+		defer w.Close()
+
+		for buf := range writeChan {
+			n, err := w.Write(buf)
+			c.options.Log.Debug("Wrote ", n, " bytes to chunk ", c.filename)
+			if n != len(buf) && err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	go func() {
+		c.options.Log.Debug("Opening connection to upload ", c.filename)
+		c.options.Log.Debug("Req: ", req)
+		_, err := c.options.HTTPClient.Do(req)
+
+		if err != nil {
+			c.options.Log.Error("Error uploading ", c.filename, ". Error: ", err)
+		} else {
+			c.options.Log.Debug("Upload of ", c.filename, " complete")
+		}
+	}()
+
+	return nil
+}
+
+//InitializeChunk Initializes chunk
+func (c *Chunk) InitializeChunk() error {
+	ret := error(nil)
+
+	if c.options.OutputType == ChunkOutputModeFile {
+		ret = c.initializeChunkFile()
+	} else if c.options.OutputType == ChunkOutputModeHTTP {
+		ret = c.initializeChunkHTTP()
+	}
+
+	return ret
+}
+
+func (c *Chunk) closeChunkFile() {
+	if c.filenameGhost != "" {
+		exists, _ := fileExists(c.filenameGhost)
+		if exists {
+			os.Remove(c.filenameGhost)
+		}
+	}
+
+	if c.fileWriter != nil {
+		c.fileDescriptor.Close()
+	}
+}
+
+func (c *Chunk) closeChunkHTTP() {
+	if c.httpWriteChan != nil {
+		close(c.httpWriteChan)
+	}
 }
 
 //Close Closes chunk
 func (c *Chunk) Close() {
 	c.options.Log.Debug("Closing chunk ", c.filename)
-	if c.options.OutputType == OutputModeFile {
-		if c.filenameGhost != "" {
-			exists, _ := fileExists(c.filenameGhost)
-			if exists {
-				os.Remove(c.filenameGhost)
-			}
-		}
-
-		if c.fileWriter != nil {
-			c.fileDescriptor.Close()
-		}
-	}
-
-	if c.options.OutputType == OutputModeHTTP {
-		if c.httpWriteChan != nil {
-			close(c.httpWriteChan)
-		}
+	if c.options.OutputType == ChunkOutputModeFile {
+		c.closeChunkFile()
+	} else if c.options.OutputType == ChunkOutputModeHTTP {
+		c.closeChunkHTTP()
 	}
 
 	return
 }
 
-//AddData Add data to chunk and flush it
-func (c *Chunk) AddData(buf []byte) error {
-	c.options.Log.Debug("Adding data to chunk ", c.filename)
-	if c.options.OutputType == OutputModeFile {
-		if c.fileWriter != nil {
-			totalWrittenBytes := 0
-			err := error(nil)
+func (c *Chunk) addDataChunkFile(buf []byte) error {
+	if c.fileWriter != nil {
+		totalWrittenBytes := 0
+		err := error(nil)
 
-			for totalWrittenBytes < len(buf) && err == nil {
-				writtenBytes, err := c.fileWriter.Write(buf[totalWrittenBytes:])
+		for totalWrittenBytes < len(buf) && err == nil {
+			writtenBytes, err := c.fileWriter.Write(buf[totalWrittenBytes:])
 
-				totalWrittenBytes = totalWrittenBytes + writtenBytes
+			totalWrittenBytes = totalWrittenBytes + writtenBytes
 
-				if err != nil {
-					return err
-				}
+			if err != nil {
+				return err
 			}
-			c.fileWriter.Flush()
 		}
-	} else if c.options.OutputType == OutputModeHTTP {
-		if c.httpWriteChan != nil {
-			c.httpWriteChan <- buf
-		}
+		c.fileWriter.Flush()
 	}
 
 	return nil
+}
+
+func (c *Chunk) addDataChunkHTTP(buf []byte) error {
+	if c.httpWriteChan != nil {
+		c.httpWriteChan <- buf
+	}
+	return nil
+}
+
+//AddData Add data to chunk and flush it
+func (c *Chunk) AddData(buf []byte) error {
+	ret := error(nil)
+
+	c.options.Log.Debug("Adding data to chunk ", c.filename)
+
+	if c.options.OutputType == ChunkOutputModeFile {
+		ret = c.addDataChunkFile(buf)
+	} else if c.options.OutputType == ChunkOutputModeHTTP {
+		ret = c.addDataChunkHTTP(buf)
+	}
+
+	c.totalBytes = c.totalBytes + len(buf)
+
+	return ret
+}
+
+//IsEmpty Indicates if there are any bytes already saved in this chunk
+func (c *Chunk) IsEmpty() bool {
+	ret := true
+	if c.totalBytes > 0 {
+		ret = false
+	}
+
+	return ret
 }
 
 //GetFilename Add data to chunk and flush it

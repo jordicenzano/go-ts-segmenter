@@ -35,14 +35,14 @@ const (
 type OutputTypes int
 
 const (
-	// OutputModeNone No no write data
-	OutputModeNone OutputTypes = iota
+	// HlsOutputModeNone No no write data
+	HlsOutputModeNone OutputTypes = iota
 
-	// OutputModeFile Saves chunks to file
-	OutputModeFile
+	// HlsOutputModeFile Saves chunks to file
+	HlsOutputModeFile
 
-	// OutputModeHttp chunks to chunked streaming server
-	OutputModeHttp
+	// HlsOutputModeHTTP chunks to chunked streaming server
+	HlsOutputModeHTTP
 )
 
 // Chunk Chunk information
@@ -118,8 +118,53 @@ func (p *Hls) SetHlsVersion(version int) {
 	p.version = version
 }
 
+func (p *Hls) saveManifestToFile(manifestByte []byte) error {
+	if p.chunklistFileName != "" {
+		err := ioutil.WriteFile(p.chunklistFileName, manifestByte, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Hls) saveManifestToHTTP(manifestByte []byte) error {
+
+	if p.chunklistFileName != "" {
+		req := &http.Request{
+			Method: "POST",
+			URL: &url.URL{
+				Scheme: p.httpScheme,
+				Host:   p.httpHost,
+				Path:   "/" + p.chunklistFileName,
+			},
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: -1,
+			Body:          ioutil.NopCloser(bytes.NewReader(manifestByte)),
+			Header:        http.Header{},
+		}
+
+		if strings.ToLower(path.Ext(p.chunklistFileName)) == ".m3u8" {
+			req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
+		}
+
+		_, err := p.httpClient.Do(req)
+
+		if err != nil {
+			p.log.Error("Error uploading ", p.chunklistFileName, ". Error: ", err)
+		} else {
+			p.log.Debug("Upload of ", p.chunklistFileName, " complete")
+		}
+	}
+
+	return nil
+}
+
 // AddChunk Adds a new chunk
 func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
+	ret := error(nil)
 
 	p.chunks = append(p.chunks, chunkData)
 
@@ -134,53 +179,16 @@ func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
 
 	if saveChunklist {
 		// Save chunklist file
-		hlsStr := p.String()
+		hlsStrByte := []byte(p.String())
 
-		hlsStrByte := []byte(hlsStr)
-
-		if p.outputType == OutputModeFile {
-			if p.chunklistFileName != "" {
-				err := ioutil.WriteFile(p.chunklistFileName, hlsStrByte, 0644)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		if p.outputType == OutputModeHttp {
-			if p.chunklistFileName != "" {
-				req := &http.Request{
-					Method: "POST",
-					URL: &url.URL{
-						Scheme: p.httpScheme,
-						Host:   p.httpHost,
-						Path:   "/" + p.chunklistFileName,
-					},
-					ProtoMajor:    1,
-					ProtoMinor:    1,
-					ContentLength: -1,
-					Body:          ioutil.NopCloser(bytes.NewReader(hlsStrByte)),
-					Header:        http.Header{},
-				}
-
-				if strings.ToLower(path.Ext(p.chunklistFileName)) == ".ts" {
-					req.Header.Set("Content-Type", "video/MP2T")
-				} else if strings.ToLower(path.Ext(p.chunklistFileName)) == ".m3u8" {
-					req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
-				}
-
-				_, err := p.httpClient.Do(req)
-
-				if err != nil {
-					p.log.Error("Error uploading ", p.chunklistFileName, ". Error: ", err)
-				} else {
-					p.log.Debug("Upload of ", p.chunklistFileName, " complete")
-				}
-			}
+		if p.outputType == HlsOutputModeFile {
+			ret = p.saveManifestToFile(hlsStrByte)
+		} else if p.outputType == HlsOutputModeHTTP {
+			ret = p.saveManifestToHTTP(hlsStrByte)
 		}
 	}
 
-	return nil
+	return ret
 }
 
 // addChunk Adds a new chunk
