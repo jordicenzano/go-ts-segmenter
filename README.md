@@ -2,7 +2,7 @@
 This tools enables you to segment (create HLS playable chunks) a live transport stream that is read from `stdin`. It also creates in real time the the HLS manifest for that rendition (the chunklist).
 The output can be sent to files in localdisk or pushed using HTTP to any webserver you have configured as a live streaming origin.
 
-This segmenter also implements "periscope" [LHLS](https://medium.com/@periscopecode/introducing-lhls-media-streaming-eb6212948bef) mode. This low latency mode is used in any output mode (local files and HTTP).
+This segmenter also implements "periscope" [LHLS](https://medium.com/@periscopecode/introducing-lhls-media-streaming-eb6212948bef) mode. This low latency mode is used in any output type (local files and HTTP).
 
 This code is not designed to be used in any production workflow, it has been created as a learning GoLang exercise.
 
