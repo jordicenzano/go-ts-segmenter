@@ -221,7 +221,10 @@ func (c *Chunk) addDataChunkFile(buf []byte) error {
 
 func (c *Chunk) addDataChunkHTTP(buf []byte) error {
 	if c.httpWriteChan != nil {
-		c.httpWriteChan <- buf
+		bufCopy := make([]byte, len(buf))
+		copy(bufCopy, buf)
+
+		c.httpWriteChan <- bufCopy
 	}
 	return nil
 }
