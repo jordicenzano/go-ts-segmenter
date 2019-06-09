@@ -165,7 +165,9 @@ func (p *TsPacket) AddData(buf []byte) {
 
 // GetBuffer Gets the buffer
 func (p *TsPacket) GetBuffer() []byte {
-	return p.buf
+	ret := make([]byte, len(p.buf))
+	copy(ret, p.buf)
+	return ret
 }
 
 // IsComplete Adds bytes to the packet
