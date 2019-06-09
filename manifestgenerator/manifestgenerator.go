@@ -423,13 +423,17 @@ func (mg *ManifestGenerator) addPacketToInitChunk(tableType packetTableTypes) bo
 		} else if tableType == PmtTable {
 			mg.initState = InitsavedPMT
 
-			mg.closeChunk(true, -1)
+			mg.closeChunk(true, -1, false)
 		}
 
 		ret = true
 	}
 
 	return ret
+}
+
+func (mg *ManifestGenerator) hlsClose() {
+	mg.hlsChunklist.CloseManifest(true)
 }
 
 func (mg *ManifestGenerator) hlsAddChunk(isGrowing bool, fileName string, durationS float64, isDisco bool) {
@@ -440,7 +444,7 @@ func (mg *ManifestGenerator) hlsAddChunk(isGrowing bool, fileName string, durati
 	}
 }
 
-func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
+func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64, isFinalChunk bool) {
 	// Close current
 
 	if isInit == false {
@@ -449,8 +453,14 @@ func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64) {
 
 			currentChunk.Close()
 
+			//NO LHLS
 			if mg.options.lhlsAdvancedChunks <= 0 {
 				mg.hlsAddChunk(false, currentChunk.GetFilename(), chunkDurationS, false)
+				if mg.options.manifestType == hls.Vod {
+					if isFinalChunk {
+						mg.hlsClose()
+					}
+				}
 			}
 
 			if len(mg.currentChunks) > 1 {
@@ -551,7 +561,7 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 }
 
 // Creates chunk and returns the initial time for the next chunk
-func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS float64, maxPCRs float64, final bool) (chunkDurationS float64, nextInitialPCRS float64) {
+func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS float64, maxPCRs float64, isFinalChunk bool) (chunkDurationS float64, nextInitialPCRS float64) {
 	chunkDurationS = -1.0
 	nextInitialPCRS = currentPCRS
 
@@ -565,8 +575,8 @@ func (mg *ManifestGenerator) nextChunk(currentPCRS float64, lastInitialPCRS floa
 
 	mg.options.log.Info("CHUNK! At PCRs: ", currentPCRS, ". ChunkDurS: ", chunkDurationS)
 
-	mg.closeChunk(false, chunkDurationS)
-	if !final {
+	mg.closeChunk(false, chunkDurationS, isFinalChunk)
+	if !isFinalChunk {
 		mg.createChunk(false)
 	}
 

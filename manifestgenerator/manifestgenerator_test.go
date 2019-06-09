@@ -211,7 +211,7 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitSegment(t *testing.T) 
 	mediaSourceReader := bufio.NewReader(f)
 	buf := make([]byte, 0, 4*1024) //4KB Buffers
 
-	mg := New(nil, mediachunk.ChunkOutputModeFile, hls.HlsOutputModeFile, pathResults, "chunk_", "chunklist.m3u8", 4.0, ChunkInit, true, -1, -1, hls.LiveWindow, 3, 0, nil, "", "")
+	mg := New(nil, mediachunk.ChunkOutputModeFile, hls.HlsOutputModeFile, pathResults, "chunk_", "chunklist.m3u8", 4.0, ChunkInit, true, -1, -1, hls.Vod, 3, 0, nil, "", "")
 
 	for {
 		n, err := mediaSourceReader.Read(buf[:cap(buf)])
@@ -285,7 +285,7 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegment(t *testin
 	mediaSourceReader := bufio.NewReader(f)
 	buf := make([]byte, 0, 4*1024) //4KB Buffers
 
-	mg := New(nil, mediachunk.ChunkOutputModeFile, hls.HlsOutputModeFile, pathResults, "chunk_", "chunklist.m3u8", 4.0, ChunkInitStart, true, -1, -1, hls.LiveWindow, 3, 0, nil, "", "")
+	mg := New(nil, mediachunk.ChunkOutputModeFile, hls.HlsOutputModeFile, pathResults, "chunk_", "chunklist.m3u8", 4.0, ChunkInitStart, true, -1, -1, hls.Vod, 3, 0, nil, "", "")
 
 	for {
 		n, err := mediaSourceReader.Read(buf[:cap(buf)])
@@ -358,6 +358,7 @@ func TestManifestGeneratorBasicVideoBigPacketsAutoPIDsInitStartSegment(t *testin
 #EXT-X-VERSION:3
 #EXT-X-MEDIA-SEQUENCE:0
 #EXT-X-DISCONTINUITY-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:VOD
 #EXT-X-TARGETDURATION:4
 #EXT-X-INDEPENDENT-SEGMENTS
 #EXTINF:4.00000000,
@@ -366,6 +367,7 @@ chunk_00000.ts
 chunk_00001.ts
 #EXTINF:2.00000000,
 chunk_00002.ts
+#EXT-X-ENDLIST
 `
 	if manifestStr != xpectedmanifestStr {
 		t.Errorf("Manifest data is different, got %s , expected %s", manifestStr, xpectedmanifestStr)

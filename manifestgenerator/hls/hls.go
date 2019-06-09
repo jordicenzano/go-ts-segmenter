@@ -70,6 +70,8 @@ type Hls struct {
 	httpClient            *http.Client
 	httpScheme            string
 	httpHost              string
+
+	isClosed bool
 }
 
 // New Creates a hls chunklist manifest
@@ -103,6 +105,7 @@ func New(
 		httpClient,
 		httpScheme,
 		httpHost,
+		false,
 	}
 
 	return h
@@ -111,6 +114,33 @@ func New(
 // SetInitChunk Adds a chunk init infomation
 func (p *Hls) SetInitChunk(initChunkFileName string) {
 	p.initChunkDataFileName = initChunkFileName
+}
+
+func (p *Hls) saveChunklist() error {
+	ret := error(nil)
+
+	hlsStrByte := []byte(p.String())
+
+	if p.outputType == HlsOutputModeFile {
+		ret = p.saveManifestToFile(hlsStrByte)
+	} else if p.outputType == HlsOutputModeHTTP {
+		ret = p.saveManifestToHTTP(hlsStrByte)
+	}
+
+	return ret
+}
+
+// CloseManifest Adds a chunk init infomation
+func (p *Hls) CloseManifest(saveChunklist bool) error {
+	ret := error(nil)
+
+	p.isClosed = true
+
+	if saveChunklist {
+		ret = p.saveChunklist()
+	}
+
+	return ret
 }
 
 // SetHlsVersion Sets manifest version
@@ -178,14 +208,7 @@ func (p *Hls) AddChunk(chunkData Chunk, saveChunklist bool) error {
 	}
 
 	if saveChunklist {
-		// Save chunklist file
-		hlsStrByte := []byte(p.String())
-
-		if p.outputType == HlsOutputModeFile {
-			ret = p.saveManifestToFile(hlsStrByte)
-		} else if p.outputType == HlsOutputModeHTTP {
-			ret = p.saveManifestToHTTP(hlsStrByte)
-		}
+		ret = p.saveChunklist()
 	}
 
 	return ret
@@ -226,6 +249,10 @@ func (p *Hls) String() string {
 
 		chunkPath, _ := filepath.Rel(path.Dir(p.chunklistFileName), chunk.FileName)
 		buffer.WriteString(chunkPath + "\n")
+	}
+
+	if p.isClosed {
+		buffer.WriteString("#EXT-X-ENDLIST\n")
 	}
 
 	return buffer.String()
