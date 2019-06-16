@@ -21,7 +21,7 @@ export GOPATH="$HOME/MYDIR/go"
 ```
 4. Add `GOPATH/bin` to your path in `~/.bash_profile` or equivalent for your shell
 ```
-export PATH="$PATH:$GOPATH/bin
+export PATH="$PATH:$GOPATH/bin"
 ```
 5. Install Glide. See [glide](https://github.com/Masterminds/glide)
 6. Restart your terminal or source your profile
