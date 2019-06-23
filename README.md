@@ -9,7 +9,7 @@ This code is not designed to be used in any production workflow, it has been cre
 ![Block diagram goes here](./pics/blockDiagramGoSegmenter.png "Block diagram")
 
 # Usage
-## Instalation
+## Installation
 1. Just download GO in your computer. See [GoLang](https://golang.org/)
 2. Create a Go directory to be used as a workspace for all go code, i.e.
 ```
