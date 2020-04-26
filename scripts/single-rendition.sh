@@ -13,7 +13,7 @@ mkdir -p $BASE_DIR
 echo "Creating master playlist manifest (playlist.m3u8)"
 echo "#EXTM3U" > $BASE_DIR/playlist.m3u8
 echo "#EXT-X-VERSION:3" >> $BASE_DIR/playlist.m3u8
-echo "#EXT-X-STREAM-INF:BANDWIDTH=996000,RESOLUTION=1280x720" >> $BASE_DIR/playlist.m3u8
+echo "#EXT-X-STREAM-INF:BANDWIDTH=6144000,RESOLUTION=1280x720" >> $BASE_DIR/playlist.m3u8
 echo "720p.m3u8" >> $BASE_DIR/playlist.m3u8
 
 # Upload master playlist
