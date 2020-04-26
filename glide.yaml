@@ -1,5 +1,5 @@
 ---
-package: github.com/zencoder/alive-go-streaming-poc
+package: github.com/jordicenzano/go-ts-segmenter
 import:
   - package: github.com/sirupsen/logrus
     version: master
