@@ -3,3 +3,5 @@ logs/
 results/
 fixture/test.ts
 .DS_Store
+glide.lock
+vendor/
