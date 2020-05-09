@@ -125,6 +125,7 @@ func (c *Chunk) initializeChunkHTTP() error {
 
 	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
 		req.Header.Set("Content-Type", "video/MP2T")
+		req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
 	}
 	c.httpReq = req
 
@@ -256,9 +257,14 @@ func (c *Chunk) IsEmpty() bool {
 	return ret
 }
 
-//GetFilename Add data to chunk and flush it
+//GetFilename Returns the filename
 func (c *Chunk) GetFilename() string {
 	return c.filename
+}
+
+//GetIndex Returns the index
+func (c *Chunk) GetIndex() uint64 {
+	return c.index
 }
 
 func fileExists(filePath string) (bool, error) {
