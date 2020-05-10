@@ -126,6 +126,7 @@ func (c *Chunk) initializeChunkHTTP() error {
 	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
 		req.Header.Set("Content-Type", "video/MP2T")
 		req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
+		req.Header.Set("Joc-Hls-TargetDuration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
 	}
 	c.httpReq = req
 
