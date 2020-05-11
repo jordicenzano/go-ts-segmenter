@@ -19,9 +19,13 @@ echo "720p.m3u8" >> $BASE_DIR/playlist.m3u8
 # Upload master playlist
 curl http://localhost:9094/results/playlist.m3u8 --upload-file $BASE_DIR/playlist.m3u8
 
+# Generate random string
+RANDOM_STR=`openssl rand -hex 8`
+echo "Ramdom stream path: $RANDOM_STR"
+
 # Select font path based in OS
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
-    FONT_PATH='/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf'
+    FONT_PATH='/usr/share/fonts/Hack-Regular.ttf'
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     FONT_PATH='/Library/Fonts/Arial.ttf'
 fi
@@ -30,7 +34,7 @@ fi
 mkfifo $BASE_DIR/fifo-720p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -lf ../logs/segmenter720p.log -d 2 -f 720p_ -cf 720p.m3u8 &
+cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $RANDOM_STR -lf ../logs/segmenter720p.log -host "hls-transocoder-public-v1-855763197.us-east-1.elb.amazonaws.com:8080" -d 2 -f 720p_ -cf 720p.m3u8 &
 PID_720p=$!
 echo "Started manifest-generator for 720p as PID $PID_720p"
 
@@ -38,7 +42,7 @@ echo "Started manifest-generator for 720p as PID $PID_720p"
 ffmpeg -hide_banner -y \
 -f lavfi -re -i smptebars=size=1280x720:rate=30 \
 -f lavfi -i sine=frequency=1000:sample_rate=48000 -pix_fmt yuv420p \
--vf "drawtext=fontfile=$FONT_PATH: text=\'${TEXT} 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=100: y=50: fontsize=30: fontcolor=pink: box=1: boxcolor=0x00000099" \
+vf "drawtext=fontfile=$FONT_PATH: text=\'${TEXT} 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\': x=100: y=50: fontsize=30: fontcolor=pink: box=1: boxcolor=0x00000099" \
 -c:v libx264 -b:v 6000k -g 60 -profile:v baseline -preset veryfast \
 -c:a aac -b:a 48k \
 -f mpegts "$BASE_DIR/fifo-720p"
