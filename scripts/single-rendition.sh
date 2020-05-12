@@ -24,6 +24,7 @@ RANDOM_STR=`openssl rand -hex 8`
 echo "Ramdom stream path: $RANDOM_STR"
 
 # Select font path based in OS
+# TODO: Probably (depending on the distrubuition) for linux you will need to find the right path
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
     FONT_PATH='/usr/share/fonts/Hack-Regular.ttf'
 elif [[ "$OSTYPE" == "darwin"* ]]; then
