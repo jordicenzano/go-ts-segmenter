@@ -37,6 +37,8 @@ var (
 	httpScheme              = flag.String("protocol", "http", "HTTP Scheme (http, https)")
 	httpHost                = flag.String("host", "localhost:9094", "HTTP Host")
 	logPath                 = flag.String("lf", "./logs/segmenter.log", "Logs file")
+	httpMaxRetries          = flag.Int("httpMaxRetries", 40, "Max retries for HTTP service unavailable")
+	initialHTTPRetryDelay   = flag.Int("initialHTTPRetryDelay", 5, "Initial retry delay in MS for chunk HTTP (no chunk transfer) uploads. Value = intent * initialHttpRetryDelay")
 )
 
 func main() {
@@ -83,6 +85,8 @@ func main() {
 		&client,
 		*httpScheme,
 		*httpHost,
+		*httpMaxRetries,
+		*initialHTTPRetryDelay,
 	)
 
 	// Reader

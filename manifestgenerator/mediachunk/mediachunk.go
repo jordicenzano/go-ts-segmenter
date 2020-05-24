@@ -38,18 +38,20 @@ const (
 
 // Options Chunking options
 type Options struct {
-	Log                *logrus.Logger
-	OutputType         OutputTypes
-	LHLS               bool
-	EstimatedDurationS float64
-	FileNumberLength   int
-	GhostPrefix        string
-	FileExtension      string
-	BasePath           string
-	ChunkBaseFilename  string
-	HTTPClient         *http.Client
-	HTTPScheme         string
-	HTTPHost           string
+	Log                     *logrus.Logger
+	OutputType              OutputTypes
+	LHLS                    bool
+	EstimatedDurationS      float64
+	FileNumberLength        int
+	GhostPrefix             string
+	FileExtension           string
+	BasePath                string
+	ChunkBaseFilename       string
+	HTTPClient              *http.Client
+	HTTPScheme              string
+	HTTPHost                string
+	MaxHTTPRetries          int
+	InitialHTTPRetryDelayMs int
 }
 
 // Chunk Chunk class
@@ -133,8 +135,8 @@ func (c *Chunk) initializeChunkFile() error {
 
 func (c *Chunk) uploadChunkTmpFileToHTTPRetry() error {
 	var ret error = nil
-	maxRetries := 20
-	retryPauseInitialMs := 10
+	maxRetries := c.options.MaxHTTPRetries
+	retryPauseInitialMs := c.options.InitialHTTPRetryDelayMs
 	retryIntent := 0
 
 	for {
@@ -189,7 +191,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 				defer resp.Body.Close()
 				if resp.StatusCode < 400 {
 					// Done
-					c.options.Log.Info("Upload of ", c.tmpFilename, " complete")
+					c.options.Log.Info("Upload of ", c.tmpFilename, "(", c.filename, ") complete")
 				} else if resp.StatusCode == http.StatusServiceUnavailable {
 					// Need to retry
 					c.options.Log.Info("Warning server busy for ", c.tmpFilename, "(", c.filename, "), RETRYING!")

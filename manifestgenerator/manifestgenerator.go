@@ -76,22 +76,24 @@ const (
 )
 
 type options struct {
-	log                *logrus.Logger
-	chunkOutputType    mediachunk.OutputTypes
-	manifestOutputType hls.OutputTypes
-	baseOutPath        string
-	chunkBaseFilename  string
-	targetSegmentDurS  float64
-	chunkInitType      ChunkInitTypes
-	autoPIDs           bool
-	videoPID           int
-	audioPID           int
-	manifestType       hls.ManifestTypes
-	liveWindowSize     int
-	lhlsAdvancedChunks int
-	httpClient         *http.Client
-	httpScheme         string
-	httpHost           string
+	log                     *logrus.Logger
+	chunkOutputType         mediachunk.OutputTypes
+	manifestOutputType      hls.OutputTypes
+	baseOutPath             string
+	chunkBaseFilename       string
+	targetSegmentDurS       float64
+	chunkInitType           ChunkInitTypes
+	autoPIDs                bool
+	videoPID                int
+	audioPID                int
+	manifestType            hls.ManifestTypes
+	liveWindowSize          int
+	lhlsAdvancedChunks      int
+	httpClient              *http.Client
+	httpScheme              string
+	httpHost                string
+	maxHTTPRetries          int
+	initialHTTPRetryDelayMs int
 }
 
 // ManifestGenerator Creates the manifest and chunks the media
@@ -151,6 +153,8 @@ func New(
 	httpClient *http.Client,
 	httpScheme string,
 	httpHost string,
+	maxHTTPRetries int,
+	initialHTTPRetryDelayMs int,
 ) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
@@ -177,6 +181,8 @@ func New(
 			httpClient,
 			httpScheme,
 			httpHost,
+			maxHTTPRetries,
+			initialHTTPRetryDelayMs,
 		},
 		false,
 		0,
@@ -493,18 +499,20 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 	// Close current
 	if isInit {
 		chunkInitOptions := mediachunk.Options{
-			Log:                mg.options.log,
-			OutputType:         mg.options.chunkOutputType,
-			LHLS:               false,
-			EstimatedDurationS: -1,
-			FileNumberLength:   ChunkFileNumberLength,
-			GhostPrefix:        GhostPrefixDefault,
-			FileExtension:      ChunkFileExtensionDefault,
-			BasePath:           mg.options.baseOutPath,
-			ChunkBaseFilename:  ChunkInitFileName,
-			HTTPClient:         mg.options.httpClient,
-			HTTPScheme:         mg.options.httpScheme,
-			HTTPHost:           mg.options.httpHost}
+			Log:                     mg.options.log,
+			OutputType:              mg.options.chunkOutputType,
+			LHLS:                    false,
+			EstimatedDurationS:      -1,
+			FileNumberLength:        ChunkFileNumberLength,
+			GhostPrefix:             GhostPrefixDefault,
+			FileExtension:           ChunkFileExtensionDefault,
+			BasePath:                mg.options.baseOutPath,
+			ChunkBaseFilename:       ChunkInitFileName,
+			HTTPClient:              mg.options.httpClient,
+			HTTPScheme:              mg.options.httpScheme,
+			HTTPHost:                mg.options.httpHost,
+			MaxHTTPRetries:          mg.options.maxHTTPRetries,
+			InitialHTTPRetryDelayMs: mg.options.initialHTTPRetryDelayMs}
 
 		newChunk := mediachunk.New(0, chunkInitOptions)
 		mg.initChunk = &newChunk
@@ -523,18 +531,20 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 		n := 0
 		for n < chunksToCreate {
 			chunkOptions := mediachunk.Options{
-				Log:                mg.options.log,
-				OutputType:         mg.options.chunkOutputType,
-				LHLS:               false,
-				EstimatedDurationS: mg.options.targetSegmentDurS,
-				FileNumberLength:   ChunkFileNumberLength,
-				GhostPrefix:        GhostPrefixDefault,
-				FileExtension:      ChunkFileExtensionDefault,
-				BasePath:           mg.options.baseOutPath,
-				ChunkBaseFilename:  mg.options.chunkBaseFilename,
-				HTTPClient:         mg.options.httpClient,
-				HTTPScheme:         mg.options.httpScheme,
-				HTTPHost:           mg.options.httpHost}
+				Log:                     mg.options.log,
+				OutputType:              mg.options.chunkOutputType,
+				LHLS:                    false,
+				EstimatedDurationS:      mg.options.targetSegmentDurS,
+				FileNumberLength:        ChunkFileNumberLength,
+				GhostPrefix:             GhostPrefixDefault,
+				FileExtension:           ChunkFileExtensionDefault,
+				BasePath:                mg.options.baseOutPath,
+				ChunkBaseFilename:       mg.options.chunkBaseFilename,
+				HTTPClient:              mg.options.httpClient,
+				HTTPScheme:              mg.options.httpScheme,
+				HTTPHost:                mg.options.httpHost,
+				MaxHTTPRetries:          mg.options.maxHTTPRetries,
+				InitialHTTPRetryDelayMs: mg.options.initialHTTPRetryDelayMs}
 
 			if mg.options.lhlsAdvancedChunks > 0 {
 				chunkOptions.LHLS = true
