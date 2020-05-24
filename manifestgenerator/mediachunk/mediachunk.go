@@ -2,6 +2,7 @@ package mediachunk
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -130,43 +131,78 @@ func (c *Chunk) initializeChunkFile() error {
 	return nil
 }
 
+func (c *Chunk) uploadChunkTmpFileToHTTPRetry() error {
+	var ret error = nil
+	maxRetries := 20
+	retryPauseInitialMs := 10
+	retryIntent := 0
+
+	for {
+		if retryIntent >= maxRetries {
+			break
+		} else {
+			retrieableErr := c.uploadChunkTmpFileToHTTP()
+			if retrieableErr != nil {
+				time.Sleep(time.Duration(retryPauseInitialMs*retryIntent) * time.Millisecond)
+			} else {
+				break
+			}
+		}
+		retryIntent++
+	}
+
+	return ret
+}
+
 func (c *Chunk) uploadChunkTmpFileToHTTP() error {
+	var ret error = nil
 
 	if c.tmpFilename != "" {
 		if c.fileDescriptor == nil {
 			c.options.Log.Error("Error reading  ", c.tmpFilename, "(", c.filename, ")")
-			return nil
-		}
-
-		req := &http.Request{
-			Method: "POST",
-			URL: &url.URL{
-				Scheme: c.options.HTTPScheme,
-				Host:   c.options.HTTPHost,
-				Path:   "/" + c.filename,
-			},
-			ProtoMajor:    1,
-			ProtoMinor:    1,
-			ContentLength: -1,
-			Body:          ioutil.NopCloser(c.fileDescriptor),
-			Header:        http.Header{},
-		}
-
-		if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-			req.Header.Set("Content-Type", "video/MP2T")
-			req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
-			req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
-		}
-
-		_, err := c.options.HTTPClient.Do(req)
-		if err != nil {
-			c.options.Log.Error("Error uploading ", c.tmpFilename, "(", c.filename, ")", "Error: ", err)
+			ret = nil
 		} else {
-			c.options.Log.Info("Upload of ", c.tmpFilename, " complete")
+			req := &http.Request{
+				Method: "POST",
+				URL: &url.URL{
+					Scheme: c.options.HTTPScheme,
+					Host:   c.options.HTTPHost,
+					Path:   "/" + c.filename,
+				},
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				ContentLength: -1,
+				Body:          ioutil.NopCloser(c.fileDescriptor),
+				Header:        http.Header{},
+			}
+
+			if strings.ToLower(path.Ext(c.filename)) == ".ts" {
+				req.Header.Set("Content-Type", "video/MP2T")
+				req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
+				req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
+			}
+
+			resp, errReq := c.options.HTTPClient.Do(req)
+			if errReq != nil {
+				c.options.Log.Error("Error uploading ", c.tmpFilename, "(", c.filename, ")", "Error: ", errReq)
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode < 400 {
+					// Done
+					c.options.Log.Info("Upload of ", c.tmpFilename, " complete")
+				} else if resp.StatusCode == http.StatusServiceUnavailable {
+					// Need to retry
+					c.options.Log.Info("Warning server busy for ", c.tmpFilename, "(", c.filename, "), RETRYING!")
+					ret = errors.New("Retryable upload error")
+				} else {
+					// Not retriable error
+					c.options.Log.Error("Error server uploading ", c.tmpFilename, "(", c.filename, ")", "HTTP Error: ", resp.StatusCode)
+				}
+			}
 		}
 	}
 
-	return nil
+	return ret
 }
 
 func (c *Chunk) initializeChunkHTTPChunkedTransfer() error {
@@ -258,7 +294,7 @@ func (c *Chunk) closeChunkTmpFileToHTTP() {
 	}
 
 	// Upload to HTTP server
-	c.uploadChunkTmpFileToHTTP()
+	c.uploadChunkTmpFileToHTTPRetry()
 
 	// Close file
 	if c.fileWriter != nil {
