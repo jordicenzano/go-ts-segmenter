@@ -37,7 +37,7 @@ fi
 mkfifo $BASE_DIR/fifo-720p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $RANDOM_STR -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 0 -mediaDestinationType 2 -f 720p_ -cf 720p.m3u8 &
+cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $RANDOM_STR -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 0 -mediaDestinationType 3 -f 720p_ -cf 720p.m3u8 &
 PID_720p=$!
 echo "Started manifest-generator for 720p as PID $PID_720p"
 

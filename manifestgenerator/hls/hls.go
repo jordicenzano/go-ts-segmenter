@@ -38,10 +38,10 @@ const (
 	// HlsOutputModeNone No no write data
 	HlsOutputModeNone OutputTypes = iota
 
-	// HlsOutputModeFile Saves chunks to file
+	// HlsOutputModeFile Saves data to file
 	HlsOutputModeFile
 
-	// HlsOutputModeHTTP chunks to chunked streaming server
+	// HlsOutputModeHTTP data to HTTP streaming server
 	HlsOutputModeHTTP
 )
 
