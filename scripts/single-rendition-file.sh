@@ -23,7 +23,7 @@ echo "Started manifest-generator for source as PID $PID_SOURCE"
 
 # Start test signal
 ffmpeg -hide_banner -y \
--stream_loop -1 -re -i "$1" \ #/home/ec2-user/media/bbb-4k-60fps-h264-aac.mp4
+-stream_loop -1 -re -i "$1" \
 -c:v copy \
 -c:a copy \
 -f mpegts "$BASE_DIR/fifo-source"
