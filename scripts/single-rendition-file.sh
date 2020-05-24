@@ -19,7 +19,7 @@ mkdir -p $BASE_DIR
 # Append to random path
 PATH_PREFIX=""
 if [ $# -gt 2 ]; then
-    PATH_PREFIX=$2
+    PATH_PREFIX=$3
 fi
 
 # Generate random string
