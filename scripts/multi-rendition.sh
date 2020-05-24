@@ -2,6 +2,8 @@
 
 BASE_DIR="../results/multirendition"
 
+HOST_DST="localhost:9094"
+
 # Clean up
 echo "Restarting ${BASE_DIR} directory"
 rm -rf $BASE_DIR/*
@@ -17,7 +19,7 @@ echo "#EXT-X-STREAM-INF:BANDWIDTH=548000,RESOLUTION=640x360" >> $BASE_DIR/playli
 echo "360p.m3u8" >> $BASE_DIR/playlist.m3u8
 
 # Upload master playlist
-curl http://localhost:9094/results/playlist.m3u8 --upload-file $BASE_DIR/playlist.m3u8
+curl "http://$HOST_DST/results/playlist.m3u8" --upload-file $BASE_DIR/playlist.m3u8
 
 # Select font path based in OS
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
@@ -31,10 +33,10 @@ mkfifo $BASE_DIR/fifo-480p
 mkfifo $BASE_DIR/fifo-360p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -l 3 -d 2 -f 480p_ -cf 480p.m3u8 &
+cat "$BASE_DIR/fifo-480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 480p_ -cf 480p.m3u8 &
 PID_480p=$!
 echo "Started manifest-generator for 480p as PID $PID_480p"
-cat "$BASE_DIR/fifo-360p" | ../bin/manifest-generator -lf ../logs/segmenter360p.log -l 3 -d 2 -f 360p_ -cf 360p.m3u8 &
+cat "$BASE_DIR/fifo-360p" | ../bin/manifest-generator -lf ../logs/segmenter360p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 360p_ -cf 360p.m3u8 &
 PID_360p=$!
 echo "Started manifest-generator for 360p as PID $PID_360p"
 

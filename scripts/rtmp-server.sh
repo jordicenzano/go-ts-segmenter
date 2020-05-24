@@ -2,6 +2,8 @@
 
 BASE_DIR="../results/rtmpsvr"
 
+HOST_DST="localhost:9094"
+
 TEXT="SOURCE-RTMP-"
 
 # Clean up
@@ -18,13 +20,13 @@ echo "#EXT-X-STREAM-INF:BANDWIDTH=6144000,RESOLUTION=1920x1080" >> $BASE_DIR/pla
 echo "1080p.m3u8" >> $BASE_DIR/playlist.m3u8
 
 # Upload master playlist
-curl http://localhost:9094/results/playlist.m3u8 --upload-file $BASE_DIR/playlist.m3u8
+curl "http://$HOST_DST/results/playlist.m3u8" --upload-file $BASE_DIR/playlist.m3u8
 
 # Creates pipes
 mkfifo $BASE_DIR/fifo-rtmp
 
 # Creates consumers
-cat "$BASE_DIR/fifo-rtmp" | ../bin/manifest-generator -lf ../logs/segmenter720p.log -d 2 -f source_ -cf source.m3u8 &
+cat "$BASE_DIR/fifo-rtmp" | ../bin/manifest-generator -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f source_ -cf source.m3u8 &
 PID_SOURCE=$!
 echo "Started manifest-generator for RTMP stream as PID $PID_SOURCE"
 
