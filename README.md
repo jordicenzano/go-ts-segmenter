@@ -45,15 +45,13 @@ make
 ## Testing
 You can execute `./bin/./manifest-generator -h` to see all the possible command arguments.
 ```
-Usage of ./bin/./manifest-generator:
+Usage of bin/manifest-generator:
   -apid int
         Audio PID to parse (default -1)
   -apids
         Enable auto PID detection, if true no need to pass vpid and apid (default true)
   -cf string
         Chunklist filename (default "chunklist.m3u8")
-  -d int
-        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer) (default 1)
   -f string
         Chunks base filename (default "chunk_")
   -host string
@@ -66,6 +64,10 @@ Usage of ./bin/./manifest-generator:
         Logs file (default "./logs/segmenter.log")
   -m int
         Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window (default 2)
+  -manifestDestinationType int
+        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP) (default 1)
+  -mediaDestinationType int
+        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular) (default 1)
   -p string
         Output path (default "./results")
   -protocol string
