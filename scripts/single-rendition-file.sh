@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
-#!/usr/bin/env bash
+if [ $# -lt 2 ]; then
+	echo "Use ./single-rendition-file.sh host file [TEXT-TO-PREFIX-TO-PATH]\n"
+    echo "Example: ./single-rendition-file.sh \"localhost:9094\" \"/media/test.mp4\""
+	exit 1
+fi
+
+HOST_DST=$1
+FILE_SRC=$2
 
 BASE_DIR="../results/singlerendition"
 
@@ -9,21 +16,28 @@ echo "Restarting ${BASE_DIR} directory"
 rm -rf $BASE_DIR/*
 mkdir -p $BASE_DIR
 
+# Append to random path
+PATH_PREFIX=""
+if [ $# -gt 2 ]; then
+    PATH_PREFIX=$2
+fi
+
 # Generate random string
 RANDOM_STR=`openssl rand -hex 8`
-echo "Ramdom stream path: $RANDOM_STR"
+UPLOAD_PATH="${PATH_PREFIX}${RANDOM_STR}"
+echo "Ramdom stream path: ${UPLOAD_PATH}"
 
 # Creates pipes
 mkfifo $BASE_DIR/fifo-source
 
 # Creates consumers
-cat "$BASE_DIR/fifo-source" | ../bin/manifest-generator -p $RANDOM_STR -lf ../logs/segmenter-source.log -host "hls-transocoder-public-v1-855763197.us-east-1.elb.amazonaws.com:8080" -manifestDestinationType 0 -mediaDestinationType 3 -f source_ -cf "source.m3u8" &
+cat "$BASE_DIR/fifo-source" | ../bin/manifest-generator -p $UPLOAD_PATH -lf ../logs/segmenter-source.log -host "$HOST_DST" -manifestDestinationType 0 -mediaDestinationType 3 -f source_ -cf "source.m3u8" &
 PID_SOURCE=$!
 echo "Started manifest-generator for source as PID $PID_SOURCE"
 
 # Start test signal
 ffmpeg -hide_banner -y \
--stream_loop -1 -re -i "$1" \
+-stream_loop -1 -re -i "$FILE_SRC" \
 -c:v copy \
 -c:a copy \
 -f mpegts "$BASE_DIR/fifo-source"

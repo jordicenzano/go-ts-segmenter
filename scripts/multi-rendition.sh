@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
-BASE_DIR="../results/multirendition"
+if [ $# -lt 1 ]; then
+	echo "Use ./multi-rendition.sh host\n"
+    echo "Example: ./multi-rendition.sh \"localhost:9094\""
+	exit 1
+fi
 
-HOST_DST="localhost:9094"
+HOST_DST=$1
+
+BASE_DIR="../results/multirendition"
 
 # Clean up
 echo "Restarting ${BASE_DIR} directory"

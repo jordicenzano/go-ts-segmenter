@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 
-HOST_DST="localhost:9094" #"hls-transocoder-public-v1-855763197.us-east-1.elb.amazonaws.com:8080"
+if [ $# -lt 1 ]; then
+	echo "Use ./single-rendition.sh host [TEXT-TO-PREFIX-TO-PATH]\n"
+    echo "Example: ./single-rendition.sh \"localhost:9094\" \"permanent-\""
+	exit 1
+fi
+
+HOST_DST=$1
 
 TEXT="SOURCE-"
 
+# Append to random path
+PATH_PREFIX=""
+if [ $# -gt 1 ]; then
+    PATH_PREFIX=$2
+fi
+
 # Generate random string
 RANDOM_STR=`openssl rand -hex 8`
-echo "Ramdom stream path: $RANDOM_STR"
+UPLOAD_PATH="${PATH_PREFIX}${RANDOM_STR}"
+echo "Ramdom stream path: ${UPLOAD_PATH}"
 
 BASE_DIR="../results/singlerendition"
 
@@ -23,7 +36,7 @@ echo "#EXT-X-STREAM-INF:BANDWIDTH=6144000,RESOLUTION=1280x720" >> $BASE_DIR/play
 echo "720p.m3u8" >> $BASE_DIR/playlist.m3u8
 
 # Upload master playlist
-curl "http://$HOST_DST/$RANDOM_STR/playlist.m3u8" --upload-file $BASE_DIR/playlist.m3u8
+curl "http://$HOST_DST/$UPLOAD_PATH/playlist.m3u8" --upload-file $BASE_DIR/playlist.m3u8
 
 # Select font path based in OS
 # TODO: Probably (depending on the distrubuition) for linux you will need to find the right path
@@ -37,7 +50,7 @@ fi
 mkfifo $BASE_DIR/fifo-720p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $RANDOM_STR -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 0 -mediaDestinationType 3 -f 720p_ -cf 720p.m3u8 &
+cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $UPLOAD_PATH -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 0 -mediaDestinationType 3 -f 720p_ -cf 720p.m3u8 &
 PID_720p=$!
 echo "Started manifest-generator for 720p as PID $PID_720p"
 

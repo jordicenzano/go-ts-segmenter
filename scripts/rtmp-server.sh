@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
+if [ $# -lt 1 ]; then
+	echo "Use ./rtmp-server.sh host-hls-destination\n"
+    echo "Example: ./rtmp-server.sh \"localhost:9094\""
+	exit 1
+fi
+
 BASE_DIR="../results/rtmpsvr"
 
-HOST_DST="localhost:9094"
+HOST_DST=$1
 
 TEXT="SOURCE-RTMP-"
 
