@@ -141,7 +141,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTPRetry() error {
 
 	for {
 		if retryIntent >= maxRetries {
-			c.options.Log.Debug("ERROR chunk lost becasue server busy ", c.tmpFilename, "(", c.filename, ")")
+			c.options.Log.Error("ERROR chunk lost becasue server busy ", c.tmpFilename, "(", c.filename, ")")
 			break
 		} else {
 			retrieableErr := c.uploadChunkTmpFileToHTTP()
@@ -161,9 +161,10 @@ func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 	var ret error = nil
 
 	if c.tmpFilename != "" {
-		if c.fileDescriptor == nil {
-			c.options.Log.Error("Error reading  ", c.tmpFilename, "(", c.filename, ")")
-			ret = nil
+		f, errOpen := os.Open(c.tmpFilename)
+		defer f.Close()
+		if errOpen != nil {
+			c.options.Log.Error("ERROR reading  ", c.tmpFilename, "(", c.filename, ")")
 		} else {
 			req := &http.Request{
 				Method: "POST",
@@ -175,7 +176,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 				ProtoMajor:    1,
 				ProtoMinor:    1,
 				ContentLength: -1,
-				Body:          ioutil.NopCloser(c.fileDescriptor),
+				Body:          ioutil.NopCloser(f),
 				Header:        http.Header{},
 			}
 
@@ -293,16 +294,11 @@ func (c *Chunk) closeChunkFile() {
 func (c *Chunk) closeChunkTmpFileToHTTP() {
 	if c.fileWriter != nil {
 		c.fileDescriptor.Sync()
-		c.fileDescriptor.Seek(0, 0)
+		c.fileDescriptor.Close()
 	}
 
 	// Upload to HTTP server
 	c.uploadChunkTmpFileToHTTPRetry()
-
-	// Close file
-	if c.fileWriter != nil {
-		c.fileDescriptor.Close()
-	}
 
 	// Delete temp file
 	exists, _ := fileExists(c.tmpFilename)
