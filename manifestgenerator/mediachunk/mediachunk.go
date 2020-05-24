@@ -141,6 +141,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTPRetry() error {
 
 	for {
 		if retryIntent >= maxRetries {
+			c.options.Log.Debug("ERROR chunk lost becasue server busy ", c.tmpFilename, "(", c.filename, ")")
 			break
 		} else {
 			retrieableErr := c.uploadChunkTmpFileToHTTP()
@@ -194,7 +195,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 					c.options.Log.Info("Upload of ", c.tmpFilename, "(", c.filename, ") complete")
 				} else if resp.StatusCode == http.StatusServiceUnavailable {
 					// Need to retry
-					c.options.Log.Info("Warning server busy for ", c.tmpFilename, "(", c.filename, "), RETRYING!")
+					c.options.Log.Debug("Warning server busy for ", c.tmpFilename, "(", c.filename, "), RETRYING!")
 					ret = errors.New("Retryable upload error")
 				} else {
 					// Not retriable error
