@@ -64,7 +64,7 @@ if [[ "$MODE" == "test" ]]; then
     -f mpegts "$BASE_DIR/fifo-480p"
 else
     # Start transmuxer
-    ffmpeg -debug -hide_banner -y \
+    ffmpeg -hide_banner -y \
     -listen 1 -i "rtmp://0.0.0.0:$RTMP_PORT/$RTMP_APP/$RTMP_STREAM" \
     -c:v copy -c:a copy \
     -f mpegts "$BASE_DIR/fifo-480p"
