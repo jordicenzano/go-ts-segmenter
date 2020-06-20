@@ -44,7 +44,9 @@ Usage of bin/manifest-generator:
   -host string
         HTTP Host (default "localhost:9094")
   -i int
-        Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk (default 2)
+        Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the beginning of each chunk (default 2)
+  -insecure
+        skips CA verification for HTTPS
   -l int
         If > 0 activates LHLS, and it indicates the number of advanced chunks to create
   -lf string

@@ -33,7 +33,7 @@ var (
 	autoPID                 = flag.Bool("apids", true, "Enable auto PID detection, if true no need to pass vpid and apid")
 	videoPID                = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID                = flag.Int("apid", -1, "Audio PID to parse")
-	chunkInitType           = flag.Int("i", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the begining of each chunk")
+	chunkInitType           = flag.Int("i", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the beginning of each chunk")
 	mediaDestinationType    = flag.Int("mediaDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular)")
 	manifestDestinationType = flag.Int("manifestDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP)")
 	httpScheme              = flag.String("protocol", "http", "HTTP Scheme (http, https)")
@@ -41,7 +41,7 @@ var (
 	logPath                 = flag.String("lf", "./logs/segmenter.log", "Logs file")
 	httpMaxRetries          = flag.Int("httpMaxRetries", 40, "Max retries for HTTP service unavailable")
 	initialHTTPRetryDelay   = flag.Int("initialHTTPRetryDelay", 5, "Initial retry delay in MS for chunk HTTP (no chunk transfer) uploads. Value = intent * initialHttpRetryDelay")
-	httpsInsecure           = flag.Bool("insecure", false, "skips CA verification for HTTPS")
+	httpsInsecure           = flag.Bool("insecure", false, "Skips CA verification for HTTPS")
 )
 
 func main() {
