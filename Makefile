@@ -19,7 +19,7 @@ install-deps:
 build:
 	if [ ! -d bin ]; then mkdir bin; fi
 	if [ ! -d logs ]; then mkdir logs; fi
-	go build -o bin/manifest-generator $(LDFLAGS) main/main.go
+	go build -o bin/manifest-generator $(LDFLAGS) main.go
 
 .PHONY: fmt
 fmt:
