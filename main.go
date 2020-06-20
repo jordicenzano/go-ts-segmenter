@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"net/http"
+	"strings"
 
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
@@ -39,6 +41,7 @@ var (
 	logPath                 = flag.String("lf", "./logs/segmenter.log", "Logs file")
 	httpMaxRetries          = flag.Int("httpMaxRetries", 40, "Max retries for HTTP service unavailable")
 	initialHTTPRetryDelay   = flag.Int("initialHTTPRetryDelay", 5, "Initial retry delay in MS for chunk HTTP (no chunk transfer) uploads. Value = intent * initialHttpRetryDelay")
+	httpsInsecure           = flag.Bool("insecure", false, "skips CA verification for HTTPS")
 )
 
 func main() {
@@ -62,7 +65,14 @@ func main() {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
-	tr := http.DefaultTransport
+	var tr = http.DefaultTransport
+	if (strings.Compare(*httpScheme, "https") == 0) && (*httpsInsecure) {
+		// Setup HTTPS client in dev env, skips CA verification
+		log.Warn("Skipping CA cert verification!")
+		tlsConfig := &tls.Config{InsecureSkipVerify: true}
+		tr = &http.Transport{TLSClientConfig: tlsConfig}
+	}
+
 	client := http.Client{
 		Transport: tr,
 		Timeout:   0,

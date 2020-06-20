@@ -33,7 +33,7 @@ echo "#EXT-X-STREAM-INF:BANDWIDTH=996000,RESOLUTION=854x480" >> $BASE_DIR/playli
 echo "480p.m3u8" >> $BASE_DIR/playlist.m3u8
 
 # Upload master playlist
-curl "http://${HOST_DST}/${PATH_NAME}/playlist.m3u8" --upload-file $BASE_DIR/playlist.m3u8
+curl "https://${HOST_DST}/${PATH_NAME}/playlist.m3u8" -H "Content-Type: application/vnd.apple.mpegurl" --insecure --upload-file $BASE_DIR/playlist.m3u8
 
 # Select font path based in OS
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
@@ -47,7 +47,7 @@ mkfifo $BASE_DIR/fifo-480p
 
 # Creates hls producer
 # 
-cat "$BASE_DIR/fifo-480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f 480p_ -cf 480p.m3u8 &
+cat "$BASE_DIR/fifo-480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -insecure -protocol https -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f 480p_ -cf 480p.m3u8 &
 PID_480p=$!
 echo "Started manifest-generator for 480p as PID $PID_480p"
 
