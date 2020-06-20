@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
 
 if [ $# -lt 1 ]; then
-	echo "Use ./single-rendition-rtmp.sh test/live [HLSOutHostPort] [RTMPPort] [RTMPApp] [RTMPStream]"
+	echo "Use ./single-rendition-rtmp.sh test/live [RTMPPort] [RTMPApp] [RTMPStream] [HLSOutHostPort]"
     echo "test/live: Generates test signal, no need for RTMP source"
-    echo "HLSOutHostPort: Host and to send HLS data (default: \"localhost:9094\")"
     echo "RTMPPort: RTMP local port (default: 1935)"
     echo "RTMPPort: RTMP app name (default: \"live\")"
     echo "RTMPPort: RTMP stream name (default: \"stream\")"
-
+    echo "HLSOutHostPort: Host and to send HLS data (default: \"localhost:9094\")"
     echo "Example: ./single-rendition-rtmp.sh live \"localhost:9094\" 1935 \"live\" \"stream\""
     exit 1
 fi
 
 MODE="${1}"
-HOST_DST="${2:"localhost:9094"}"
-RTMP_PORT="${3:"1935"}"
-RTMP_APP="${4:"live"}"
-RTMP_STREAM="${5:"stream"}"
+RTMP_PORT="${2:"1935"}"
+RTMP_APP="${3:"live"}"
+RTMP_STREAM="${4:"stream"}"
+HOST_DST="${5:"localhost:9094"}"
 
 PATH_NAME="srrtmp"
 BASE_DIR="../results/${PATH_NAME}"
@@ -66,7 +65,7 @@ if [[ "$MODE" == "test" ]]; then
 else
     # Start transmuxer
     ffmpeg -debug -hide_banner -y \
-    -listen 1 -i "rtmp://0.0.0.0:${RTMP_PORT}/${RTMP_APP}/stream" \
+    -listen 1 -i "rtmp://0.0.0.0:${RTMP_PORT}/${RTMP_APP}/${RTMP_STREAM}" \
     -c:v copy -c:a copy \
     -f mpegts "$BASE_DIR/fifo-480p"
 fi

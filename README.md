@@ -10,34 +10,21 @@ This code is not designed to be used in any production workflow, it has been cre
 
 # Usage
 ## Installation
-1. Just download GO in your computer. See [GoLang](https://golang.org/)
-2. Create a Go directory to be used as a workspace for all go code, i.e.
+1. Just install GO in your computer. See [GoLang](https://golang.org/), [instructions](https://golang.org/doc/install)
+2. Clone this repo:
 ```
-mkdir ~/MYDIR/go
-```
-3. Add `GOPATH` to your `~/.bash_profile` or equivalent for your shell
-```
-export GOPATH="$HOME/MYDIR/go"
-```
-4. Add `GOPATH/bin` to your path in `~/.bash_profile` or equivalent for your shell
-```
-export PATH="$PATH:$GOPATH/bin"
-```
-5. Install Glide. See [glide](https://github.com/Masterminds/glide)
-6. Restart your terminal or source your profile
-7. Clone this repo:
-```
+cd ~
 go get github.com/jordicenzano/go-ts-segmenter
 ```
-8. Go the the source code dir `
+3. Go the the source code dir `
 ```
-cd $HOME/MYDIR/go/src/github.com/jordicenzano/go-ts-segmenter
+cd go/src/github.com/jordicenzano/go-ts-segmenter
 ```
-9. Install the package dependencies:
+4. Install the package dependencies:
 ```
-glide up
+go get
 ```
-10. Compile `main.go` doing:
+5. Compile `main.go` doing:
 ```
 make
 ```
