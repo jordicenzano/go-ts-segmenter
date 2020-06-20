@@ -12,10 +12,10 @@ if [ $# -lt 1 ]; then
 fi
 
 MODE="${1}"
-RTMP_PORT="${2:"1935"}"
-RTMP_APP="${3:"live"}"
-RTMP_STREAM="${4:"stream"}"
-HOST_DST="${5:"localhost:9094"}"
+RTMP_PORT="${2:-"1935"}"
+RTMP_APP="${3:-"live"}"
+RTMP_STREAM="${4:-"stream"}"
+HOST_DST="${5:-"localhost:9094"}"
 
 PATH_NAME="srrtmp"
 BASE_DIR="../results/${PATH_NAME}"
