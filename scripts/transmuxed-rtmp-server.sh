@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
 if [ $# -lt 1 ]; then
-	echo "Use ./single-rendition-rtmp.sh test/live [RTMPPort] [RTMPApp] [RTMPStream] [HLSOutHostPort]"
+	echo "Use ./transmuxed-rtmp-server.sh test/live [RTMPPort] [RTMPApp] [RTMPStream] [HLSOutHostPort]"
     echo "test/live: Generates test signal, no need for RTMP source"
     echo "RTMPPort: RTMP local port (default: 1935)"
     echo "RTMPPort: RTMP app name (default: \"live\")"
     echo "RTMPPort: RTMP stream name (default: \"stream\")"
     echo "HLSOutHostPort: Host and to send HLS data (default: \"localhost:9094\")"
-    echo "Example: ./single-rendition-rtmp.sh live \"localhost:9094\" 1935 \"live\" \"stream\""
+    echo "Example: ./transmuxed-rtmp-server.sh live \"localhost:9094\" 1935 \"live\" \"stream\""
     exit 1
 fi
 
@@ -44,9 +44,9 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
     FONT_PATH='/Library/Fonts/Arial.ttf'
 fi
 
-# Creates pipes
+# Creates pipe
 FIFO_FILENAME="fifo-$STREAM_NAME"
-mkfifo "$BASE_DIR/fifo-$STREAM_NAME"
+mkfifo $BASE_DIR/$FIFO_FILENAME
 
 # Creates hls producer
 cat "$BASE_DIR/$FIFO_FILENAME" | ../bin/manifest-generator -lf ../logs/segmenterSource.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME}_ -cf ${STREAM_NAME}.m3u8 &
