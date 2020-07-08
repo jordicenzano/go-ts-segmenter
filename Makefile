@@ -1,65 +1,63 @@
+
+# Add bin dir to path
 ifeq ($(shell uname),Darwin)
 	BINDIR = binaries/darwin
 else ifeq ($(shell uname),Linux)
 	BINDIR = binaries/linux_x86_64
 endif
-
 PATH := $(shell pwd)/$(BINDIR):$(PATH)
 
+BINARY_NAME="go-ts-segmenter"
+
+# DOCKER Section
+include ./secrets/docker-creds.secrets
+DOCKER_IMAGE_NAME = docker-go-ts-segmenter
+DOCKER_IMAGE_VERSION = 1.0
+
+# Set flags for logs build
 LDFLAGS = -ldflags "-X main.gitSHA=$(shell git rev-parse HEAD)"
 
-.PHONY: all
-all: build test
+.PHONY: build build_in_docker install_deps clean build_docker tag_latest_docker push_docker push_latest_docker last_built_date_docker shell_docker
 
-.PHONY: install-deps
-install-deps:
-	glide install
-
-.PHONY: build
 build:
 	if [ ! -d bin ]; then mkdir bin; fi
 	if [ ! -d logs ]; then mkdir logs; fi
-	go build -o bin/manifest-generator $(LDFLAGS) main.go
+	go build -o "bin/${BINARY_NAME}" $(LDFLAGS) main.go
 
-.PHONY: fmt
-fmt:
-	find . -not -path "./vendor/*" -name '*.go' -type f | sed 's#\(.*\)/.*#\1#' | sort -u | xargs -n1 -I {} bash -c "cd {} && goimports -w *.go && gofmt -w -s -l *.go"
+build_in_docker:
+	go get
+	if [ ! -d bin ]; then mkdir bin; fi
+	if [ ! -d logs ]; then mkdir logs; fi
+	go build -o "bin/${BINARY_NAME}" main.go
 
-.PHONY: test
-test:
-ifndef BINDIR
-	$(error Unable to set PATH based on current platform.)
-endif
-	#TODO go test $(V) ./handlers
+install_deps:
+	go get
 
-.PHONY: clean
 clean:
 	go clean
-	rm -f bin/manifest-generator
+	rm -f "bin/${BINARY_NAME}"
 	rm -f logs/*
 
-#.PHONY: circle-docker-build-push
-#circle-docker-build-push:
-#	docker login -e="." -u="$(QUAY_USER)" -p="$(QUAY_TOKEN)" quay.io
-#	./docker_build.sh -p
+build_docker: Dockerfile
+	docker build -t $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION) --rm .
 
-#.PHONY: circle-fleet-deploy
-#circle-fleet-deploy:
-#	./fleet/circle-fleet-deploy.sh
+tag_latest_docker:
+	docker tag $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION) $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):latest
 
-#.PHONY: docker-build
-#docker-build:
-#	./docker_build.sh -r
+push_docker:
+	docker login -u $(DOCKER_REPO_USER) -p $(DOCKER_REPO_PASS)
+	docker push $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
+	docker logout
 
-#.PHONY: docker-build-push
-#docker-build-push:
-#	./docker_build.sh -r -p
+push_latest_docker:
+	docker login -u $(DOCKER_REPO_USER) -p $(DOCKER_REPO_PASS)
+	docker push $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):latest
+	docker logout
 
-#.PHONY: docker-image
-#docker-image:
-#	docker build -t alive-streamer .
-#	$(foreach REGION,$(ECR_REGIONS),docker tag alive-streamer ???.dkr.ecr.$(REGION).amazonaws.com/playback/alive-streamer:$(CIRCLE_SHA1);)
+last_built_date_docker:
+	docker inspect -f '{{ .Created }}' $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
 
-#.PHONY: docker-push
-#docker-push:
-#	$(foreach REGION,$(ECR_REGIONS),docker push ???.dkr.ecr.$(REGION).amazonaws.com/playback/alive-streamer:$(CIRCLE_SHA1);)
+shell_docker:
+	docker run --rm -it --cap-add=NET_ADMIN --entrypoint /bin/bash $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
+
+default: build

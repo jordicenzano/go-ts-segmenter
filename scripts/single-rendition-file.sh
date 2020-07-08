@@ -31,9 +31,9 @@ echo "Ramdom stream path: ${UPLOAD_PATH}"
 mkfifo $BASE_DIR/fifo-source
 
 # Creates consumers
-cat "$BASE_DIR/fifo-source" | ../bin/manifest-generator -p $UPLOAD_PATH -lf ../logs/segmenter-source.log -host "$HOST_DST" -manifestDestinationType 0 -mediaDestinationType 3 -f source_ -cf "source.m3u8" &
+cat "$BASE_DIR/fifo-source" | ../bin/go-ts-segmenter -p $UPLOAD_PATH -lf ../logs/segmenter-source.log -host "$HOST_DST" -manifestDestinationType 0 -mediaDestinationType 3 -f source_ -cf "source.m3u8" &
 PID_SOURCE=$!
-echo "Started manifest-generator for source as PID $PID_SOURCE"
+echo "Started go-ts-segmenter for source as PID $PID_SOURCE"
 
 # Start test signal
 ffmpeg -hide_banner -y \

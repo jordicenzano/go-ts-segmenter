@@ -49,9 +49,9 @@ FIFO_FILENAME="fifo-$STREAM_NAME"
 mkfifo $BASE_DIR/$FIFO_FILENAME
 
 # Creates hls producer
-cat "$BASE_DIR/$FIFO_FILENAME" | ../bin/manifest-generator -lf ../logs/segmenterSource.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME}_ -cf ${STREAM_NAME}.m3u8 &
+cat "$BASE_DIR/$FIFO_FILENAME" | ../bin/go-ts-segmenter -lf ../logs/segmenterSource.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME}_ -cf ${STREAM_NAME}.m3u8 &
 PID_SOURCE=$!
-echo "Started manifest-generator for $STREAM_NAME as PID $PID_SOURCE"
+echo "Started go-ts-segmenter for $STREAM_NAME as PID $PID_SOURCE"
 
 if [[ "$MODE" == "test" ]]; then
     # Start test signal

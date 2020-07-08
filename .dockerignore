@@ -7,4 +7,3 @@ fixture/test.ts
 glide.lock
 vendor/
 /secrets/*
-!/secrets/*.example

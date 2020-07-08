@@ -35,9 +35,9 @@ fi
 mkfifo $BASE_DIR/fifo-720p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-720p" | ../bin/manifest-generator -p $UPLOAD_PATH -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 720p_ -cf 720p.m3u8 &
+cat "$BASE_DIR/fifo-720p" | ../bin/go-ts-segmenter -p $UPLOAD_PATH -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 720p_ -cf 720p.m3u8 &
 PID_720p=$!
-echo "Started manifest-generator for 720p as PID $PID_720p"
+echo "Started go-ts-segmenter for 720p as PID $PID_720p"
 
 # Start test signal
 ffmpeg -hide_banner -y \

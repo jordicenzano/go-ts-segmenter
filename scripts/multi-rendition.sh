@@ -39,12 +39,12 @@ mkfifo $BASE_DIR/fifo-480p
 mkfifo $BASE_DIR/fifo-360p
 
 # Creates consumers
-cat "$BASE_DIR/fifo-480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 480p_ -cf 480p.m3u8 &
+cat "$BASE_DIR/fifo-480p" | ../bin/go-ts-segmenter -lf ../logs/segmenter480p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 480p_ -cf 480p.m3u8 &
 PID_480p=$!
-echo "Started manifest-generator for 480p as PID $PID_480p"
-cat "$BASE_DIR/fifo-360p" | ../bin/manifest-generator -lf ../logs/segmenter360p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 360p_ -cf 360p.m3u8 &
+echo "Started go-ts-segmenter for 480p as PID $PID_480p"
+cat "$BASE_DIR/fifo-360p" | ../bin/go-ts-segmenter -lf ../logs/segmenter360p.log -l 3 -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f 360p_ -cf 360p.m3u8 &
 PID_360p=$!
-echo "Started manifest-generator for 360p as PID $PID_360p"
+echo "Started go-ts-segmenter for 360p as PID $PID_360p"
 
 # Start test signal
 ffmpeg -hide_banner -y \

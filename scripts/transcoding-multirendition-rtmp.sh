@@ -55,12 +55,12 @@ FIFO_FILENAME_480p="fifo-$STREAM_NAME_480p"
 mkfifo $BASE_DIR/$FIFO_FILENAME_480p
 
 # Creates hls producers
-cat "$BASE_DIR/$FIFO_FILENAME_720p" | ../bin/manifest-generator -lf ../logs/segmenter720p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_720p}_ -cf ${STREAM_NAME_720p}.m3u8 &
+cat "$BASE_DIR/$FIFO_FILENAME_720p" | ../bin/go-ts-segmenter -lf ../logs/segmenter720p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_720p}_ -cf ${STREAM_NAME_720p}.m3u8 &
 PID_720p=$!
-echo "Started manifest-generator for $STREAM_NAME_720p as PID $PID_720p"
-cat "$BASE_DIR/$FIFO_FILENAME_480p" | ../bin/manifest-generator -lf ../logs/segmenter480p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_480p}_ -cf ${STREAM_NAME_480p}.m3u8 &
+echo "Started go-ts-segmenter for $STREAM_NAME_720p as PID $PID_720p"
+cat "$BASE_DIR/$FIFO_FILENAME_480p" | ../bin/go-ts-segmenter -lf ../logs/segmenter480p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_480p}_ -cf ${STREAM_NAME_480p}.m3u8 &
 PID_480p=$!
-echo "Started manifest-generator for $STREAM_NAME_480p as PID $PID_480p"
+echo "Started go-ts-segmenter for $STREAM_NAME_480p as PID $PID_480p"
 
 
 if [[ "$MODE" == "test" ]]; then

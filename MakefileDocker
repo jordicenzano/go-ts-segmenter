@@ -1,0 +1,13 @@
+
+# Add bin dir to path
+PATH := $(shell pwd)/"binaries/linux_x86_64":$(PATH)
+
+BINARY_NAME="go-ts-segmenter"
+
+.PHONY: build
+
+build:
+	go get
+	if [ ! -d bin ]; then mkdir bin; fi
+	if [ ! -d logs ]; then mkdir logs; fi
+	go build -o "bin/${BINARY_NAME}" main.go

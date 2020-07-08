@@ -32,9 +32,9 @@ curl "http://$HOST_DST/results/playlist.m3u8" --upload-file $BASE_DIR/playlist.m
 mkfifo $BASE_DIR/fifo-rtmp
 
 # Creates consumers
-cat "$BASE_DIR/fifo-rtmp" | ../bin/manifest-generator -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f source_ -cf source.m3u8 &
+cat "$BASE_DIR/fifo-rtmp" | ../bin/go-ts-segmenter -lf ../logs/segmenter720p.log -host $HOST_DST -manifestDestinationType 2 -mediaDestinationType 2 -f source_ -cf source.m3u8 &
 PID_SOURCE=$!
-echo "Started manifest-generator for RTMP stream as PID $PID_SOURCE"
+echo "Started go-ts-segmenter for RTMP stream as PID $PID_SOURCE"
 
 # Start test signal
 ffmpeg -hide_banner -y \
