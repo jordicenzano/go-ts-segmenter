@@ -131,7 +131,7 @@ In both cases you will see a latency reduction. In the case of an LHLS player yo
 docker run --rm -it jcenzano/docker-go-ts-segmenter
 ```
 
-1. To segment TS via TCP, using localhost port 2022 as input for TS
+2. To segment TS via TCP, using localhost port 2022 as input for TS
 ```
 docker run -i -t --rm -p 2002:2002 -v ~/Movies/testTsSeg:/tmpdata jcenzano/docker-go-ts-segmenter:latest -inputType 2 -dstPath /tmpdata -chunksBaseFilename source_ -chunklistFilename source.m3u8
 ```
