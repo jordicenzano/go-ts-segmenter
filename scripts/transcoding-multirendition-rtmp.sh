@@ -55,10 +55,10 @@ FIFO_FILENAME_480p="fifo-$STREAM_NAME_480p"
 mkfifo $BASE_DIR/$FIFO_FILENAME_480p
 
 # Creates hls producers
-cat "$BASE_DIR/$FIFO_FILENAME_720p" | ../bin/go-ts-segmenter -lf ../logs/segmenter720p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_720p}_ -cf ${STREAM_NAME_720p}.m3u8 &
+cat "$BASE_DIR/$FIFO_FILENAME_720p" | ../bin/go-ts-segmenter -logsPath ../logs/segmenter720p.log -dstPath ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -targetDur 1 -lhls 3 -chunksBaseFilename ${STREAM_NAME_720p}_ -chunklistFilename ${STREAM_NAME_720p}.m3u8 &
 PID_720p=$!
 echo "Started go-ts-segmenter for $STREAM_NAME_720p as PID $PID_720p"
-cat "$BASE_DIR/$FIFO_FILENAME_480p" | ../bin/go-ts-segmenter -lf ../logs/segmenter480p.log -p ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -t 1 -l 3 -f ${STREAM_NAME_480p}_ -cf ${STREAM_NAME_480p}.m3u8 &
+cat "$BASE_DIR/$FIFO_FILENAME_480p" | ../bin/go-ts-segmenter -logsPath ../logs/segmenter480p.log -dstPath ${PATH_NAME} -manifestDestinationType 2 -mediaDestinationType 2 -targetDur 1 -lhls 3 -chunksBaseFilename ${STREAM_NAME_480p}_ -chunklistFilename ${STREAM_NAME_480p}.m3u8 &
 PID_480p=$!
 echo "Started go-ts-segmenter for $STREAM_NAME_480p as PID $PID_480p"
 
@@ -69,13 +69,11 @@ if [[ "$MODE" == "test" ]]; then
     ffmpeg -hide_banner -y \
     -f lavfi -re -i smptebars=duration=36000:size=1280x720:rate=30 \
     -f lavfi -i sine=frequency=1000:duration=36000:sample_rate=48000 -pix_fmt yuv420p \
-    -vf scale=1280x720 \
-    -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
+    -s 1280x720 -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
     -c:v libx264 -tune zerolatency -b:v 6000k -g 30 -preset ultrafast \
     -c:a aac -b:a 48k \
     -f mpegts "$BASE_DIR/$FIFO_FILENAME_720p" \
-    -vf scale=854x480 \
-    -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 480p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
+    -s 854x480 -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 480p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
     -c:v libx264 -tune zerolatency -b:v 3000k -g 30 -preset ultrafast \
     -c:a aac -b:a 48k \
     -f mpegts "$BASE_DIR/$FIFO_FILENAME_480p"
@@ -83,13 +81,11 @@ else
     # Start transmuxer
     ffmpeg -hide_banner -y \
     -listen 1 -i "rtmp://0.0.0.0:$RTMP_PORT/$RTMP_APP/$RTMP_STREAM" \
-    -vf scale=1280x720 \
-    -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
+    -s 1280x720 -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 720p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
     -c:v libx264 -tune zerolatency -b:v 6000k -g 30 -preset ultrafast \
     -c:a aac -b:a 48k \
     -f mpegts "$BASE_DIR/$FIFO_FILENAME_720p" \
-    -vf scale=854x480 \
-    -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 480p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
+    -s 854x480 -vf "drawtext=fontfile=$FONT_PATH:text=\'RENDITION 480p - Local time %{localtime\: %Y\/%m\/%d %H.%M.%S} (%{n})\':x=10:y=350:fontsize=30:fontcolor=pink:box=1:boxcolor=0x00000099" \
     -c:v libx264 -tune zerolatency -b:v 3000k -g 30 -preset ultrafast \
     -c:a aac -b:a 48k \
     -f mpegts "$BASE_DIR/$FIFO_FILENAME_480p"

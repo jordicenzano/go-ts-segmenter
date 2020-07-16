@@ -58,6 +58,6 @@ last_built_date_docker:
 	docker inspect -f '{{ .Created }}' $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
 
 shell_docker:
-	docker run --rm -it --cap-add=NET_ADMIN --entrypoint /bin/bash $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
+	docker run --rm -it --entrypoint /bin/bash $(DOCKER_REPO_USER)/$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_VERSION)
 
 default: build
