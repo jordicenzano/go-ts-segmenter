@@ -71,12 +71,16 @@ type Chunk struct {
 	// Used by NON chunk transfer HTTP
 	tmpFilename string
 
+	// Bytes received
 	totalBytes int
+
+	// Epoch time when we recived first byte for this chunk
+	createdAt int64
 }
 
 // New Creates a chunk instance
 func New(index uint64, options Options) Chunk {
-	c := Chunk{nil, nil, nil, nil, options, index, "", "", "", 0}
+	c := Chunk{nil, nil, nil, nil, options, index, "", "", "", 0, time.Now().UnixNano()}
 
 	c.filename = c.createFilename(options.BasePath, options.ChunkBaseFilename, index, options.FileNumberLength, options.FileExtension, "")
 	if options.GhostPrefix != "" {
@@ -184,6 +188,7 @@ func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 				req.Header.Set("Content-Type", "video/MP2T")
 				req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
 				req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
+				req.Header.Set("Joc-Hls-CreatedAt-Ns", strconv.FormatInt(c.createdAt, 10))
 			}
 
 			resp, errReq := c.options.HTTPClient.Do(req)
@@ -233,6 +238,7 @@ func (c *Chunk) initializeChunkHTTPChunkedTransfer() error {
 		req.Header.Set("Content-Type", "video/MP2T")
 		req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
 		req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
+		req.Header.Set("Joc-Hls-CreatedAt-Ns", strconv.FormatInt(c.createdAt, 10))
 	}
 	c.httpReq = req
 
