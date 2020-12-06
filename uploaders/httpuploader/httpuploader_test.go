@@ -226,7 +226,4 @@ func TestUploadChunkedData(t *testing.T) {
 
 	// Wait to process the data
 	wg.Wait()
-
-	//TODO: JOC fix this patch
-	//time.Sleep(time.Second * 20)
 }
