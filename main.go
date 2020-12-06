@@ -9,6 +9,7 @@ import (
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/s3uploader"
 	"github.com/sirupsen/logrus"
 
 	"bufio"
@@ -34,8 +35,8 @@ var (
 	videoPID                = flag.Int("vpid", -1, "Video PID to parse")
 	audioPID                = flag.Int("apid", -1, "Audio PID to parse")
 	chunkInitType           = flag.Int("initType", int(manifestgenerator.ChunkInitStart), "Indicates where to put the init data PAT and PMT packets (0- No ini data, 1- Init segment, 2- At the beginning of each chunk")
-	mediaDestinationType    = flag.Int("mediaDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular)")
-	manifestDestinationType = flag.Int("manifestDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP)")
+	mediaDestinationType    = flag.Int("mediaDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular, 4- S3 regular)")
+	manifestDestinationType = flag.Int("manifestDestinationType", 1, "Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP, 3- S3)")
 	httpScheme              = flag.String("protocol", "http", "HTTP Scheme (http, https)")
 	httpHost                = flag.String("host", "localhost:9094", "HTTP Host")
 	logPath                 = flag.String("logsPath", "", "Logs file path")
@@ -44,6 +45,12 @@ var (
 	httpsInsecure           = flag.Bool("insecure", false, "Skips CA verification for HTTPS out")
 	inputType               = flag.Int("inputType", 1, "Where gets the input data (1-stdin, 2-TCP socket)")
 	localPort               = flag.Int("localPort", 2002, "Local port to listen in case inputType = 2")
+	awsID                   = flag.String("awsId", "", "AWSId in case you do not want to use default machine credentials")
+	awsSecret               = flag.String("awsSecret", "", "AWSSecret in case you do not want to use default machine credentials")
+	awsRegion               = flag.String("s3Region", "", "Specific aws region to use for AWS S3 destination")
+	s3Bucket                = flag.String("s3Bucket", "", "S3 bucket to upload files, in case of sing an S3 destination")
+	s3UploadTimeOut         = flag.Int("s3UploadTimeout", 10000, "Timeout for any S3 upload in MS")
+	s3IsPublicRead          = flag.Bool("s3IsPublicRead", false, "Set ACL = \"public-read\" for all S3 uploads")
 )
 
 func main() {
@@ -68,9 +75,19 @@ func main() {
 	}
 
 	var httpUploader *httpuploader.HTTPUploader = nil
-	if isHTTPout() {
+	var s3Uploader *s3uploader.S3Uploader = nil
+	if isHTTPOut() {
 		httpUploaderTmp := httpuploader.New(log, *httpsInsecure, *httpScheme, *httpHost, *httpMaxRetries, *initialHTTPRetryDelay)
 		httpUploader = &httpUploaderTmp
+	} else if isS3Out() {
+		awsCreds := s3uploader.AWSLocalCreds{}
+		if (*awsID != "") && (*awsSecret != "") {
+			awsCreds.Valid = true
+			awsCreds.AWSId = *awsID
+			awsCreds.AWSSecret = *awsSecret
+		}
+		s3UploaderTmp := s3uploader.New(log, *s3Bucket, *awsRegion, *s3UploadTimeOut, *s3IsPublicRead, awsCreds)
+		s3Uploader = &s3UploaderTmp
 	}
 
 	mg := manifestgenerator.New(log,
@@ -87,7 +104,8 @@ func main() {
 		hls.ManifestTypes(*manifestTypeInt),
 		*liveWindowSize,
 		*lhlsAdvancedChunks,
-		httpUploader)
+		httpUploader,
+		s3Uploader)
 
 	// Create the requested input reader
 	var r *bufio.Reader = nil
@@ -137,8 +155,15 @@ func main() {
 	os.Exit(0)
 }
 
-func isHTTPout() bool {
+func isHTTPOut() bool {
 	if (*mediaDestinationType == 2) || (*mediaDestinationType == 3) || (*manifestDestinationType == 2) {
+		return true
+	}
+	return false
+}
+
+func isS3Out() bool {
+	if (*mediaDestinationType == 4) || (*manifestDestinationType == 3) {
 		return true
 	}
 	return false

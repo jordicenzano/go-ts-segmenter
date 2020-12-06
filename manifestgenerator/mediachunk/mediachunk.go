@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/s3uploader"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,6 +49,7 @@ type Options struct {
 	BasePath           string
 	ChunkBaseFilename  string
 	HTTPUploader       *httpuploader.HTTPUploader
+	S3Uploader         *s3uploader.S3Uploader
 }
 
 // Chunk Chunk class
@@ -134,32 +136,8 @@ func (c *Chunk) initializeChunkFile() error {
 	return nil
 }
 
-func (c *Chunk) uploadChunkTmpFileToHTTP() error {
-	var ret error = nil
-
-	if c.tmpFilename != "" {
-		h := make(map[string]string)
-		if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-			h["Content-Type"] = "video/MP2T"
-			h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
-			h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
-			h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
-		}
-		ret = c.options.HTTPUploader.UploadLocalFile(c.tmpFilename, c.filename, h)
-	}
-
-	return ret
-}
-
 func (c *Chunk) initializeChunkHTTPChunkedTransfer() error {
-	h := make(map[string]string)
-	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-		h["Content-Type"] = "video/MP2T"
-		h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
-		h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
-		h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
-	}
-	c.httpWriteChan = c.options.HTTPUploader.UploadChunkedTransfer(c.filename, h)
+	c.httpWriteChan = c.options.HTTPUploader.UploadChunkedTransfer(c.filename, c.getChunkHeaders())
 
 	return nil
 }
@@ -172,10 +150,8 @@ func (c *Chunk) InitializeChunk() error {
 		ret = c.initializeChunkFile()
 	} else if c.options.OutputType == ChunkOutputModeHTTPChunkedTransfer {
 		ret = c.initializeChunkHTTPChunkedTransfer()
-	} else if c.options.OutputType == ChunkOutputModeHTTPRegular {
+	} else if c.options.OutputType == ChunkOutputModeHTTPRegular || c.options.OutputType == ChunkOutputModeS3 {
 		ret = c.initializeChunkTempFile()
-	} else if c.options.OutputType == ChunkOutputModeS3 {
-		//TODO: JOC ret = c.initializeS3TempFile()
 	}
 	return ret
 }
@@ -193,14 +169,20 @@ func (c *Chunk) closeChunkFile() {
 	}
 }
 
-func (c *Chunk) closeChunkTmpFileToHTTP() {
+func (c *Chunk) closeChunkTmpFileExternal(outputType OutputTypes) {
 	if c.fileWriter != nil {
 		c.fileDescriptor.Sync()
 		c.fileDescriptor.Close()
 	}
 
-	// Upload to HTTP server
-	c.uploadChunkTmpFileToHTTP()
+	if c.tmpFilename != "" {
+		h := c.getChunkHeaders()
+		if outputType == ChunkOutputModeS3 {
+			c.options.S3Uploader.UploadLocalFile(c.tmpFilename, c.filename, h)
+		} else {
+			c.options.HTTPUploader.UploadLocalFile(c.tmpFilename, c.filename, h)
+		}
+	}
 
 	// Delete temp file
 	exists, _ := fileExists(c.tmpFilename)
@@ -222,13 +204,21 @@ func (c *Chunk) Close() {
 		c.closeChunkFile()
 	} else if c.options.OutputType == ChunkOutputModeHTTPChunkedTransfer {
 		c.closeChunkHTTPChunkedTransfer()
-	} else if c.options.OutputType == ChunkOutputModeHTTPRegular {
-		c.closeChunkTmpFileToHTTP()
-	} else if c.options.OutputType == ChunkOutputModeS3 {
-		//TODO: JOC c.closeChunkTmpFileToS3()
+	} else if c.options.OutputType == ChunkOutputModeHTTPRegular || c.options.OutputType == ChunkOutputModeS3 {
+		c.closeChunkTmpFileExternal(c.options.OutputType)
 	}
-
 	return
+}
+
+func (c *Chunk) getChunkHeaders() map[string]string {
+	h := make(map[string]string)
+	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
+		h["Content-Type"] = "video/MP2T"
+		h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
+		h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
+		h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
+	}
+	return h
 }
 
 func (c *Chunk) addDataChunkFile(buf []byte) error {
@@ -267,12 +257,10 @@ func (c *Chunk) AddData(buf []byte) error {
 
 	c.options.Log.Debug("Adding data to chunk ", c.filename)
 
-	if c.options.OutputType == ChunkOutputModeFile || c.options.OutputType == ChunkOutputModeHTTPRegular {
+	if c.options.OutputType == ChunkOutputModeFile || c.options.OutputType == ChunkOutputModeHTTPRegular || c.options.OutputType == ChunkOutputModeS3 {
 		ret = c.addDataChunkFile(buf)
 	} else if c.options.OutputType == ChunkOutputModeHTTPChunkedTransfer {
 		ret = c.addDataChunkHTTP(buf)
-	} else if c.options.OutputType == ChunkOutputModeS3 {
-		//TODO: JOC ret = c.addDataChunkS3(buf)
 	}
 	c.totalBytes = c.totalBytes + len(buf)
 

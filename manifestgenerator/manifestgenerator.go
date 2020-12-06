@@ -8,6 +8,7 @@ import (
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/tspacket"
 	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/s3uploader"
 	"github.com/sirupsen/logrus"
 )
 
@@ -90,6 +91,7 @@ type options struct {
 	liveWindowSize     int
 	lhlsAdvancedChunks int
 	httpUploader       *httpuploader.HTTPUploader
+	s3Uploader         *s3uploader.S3Uploader
 }
 
 // ManifestGenerator Creates the manifest and chunks the media
@@ -147,6 +149,7 @@ func New(
 	liveWindowSize int,
 	lhlsAdvancedChunks int,
 	httpUploader *httpuploader.HTTPUploader,
+	s3Uploader *s3uploader.S3Uploader,
 ) ManifestGenerator {
 	if log == nil {
 		log = logrus.New()
@@ -171,6 +174,7 @@ func New(
 			liveWindowSize,
 			lhlsAdvancedChunks,
 			httpUploader,
+			s3Uploader,
 		},
 		false,
 		0,
@@ -196,6 +200,7 @@ func New(
 			"",
 			manifestOutputType,
 			httpUploader,
+			s3Uploader,
 		),
 		false,
 	}
@@ -494,7 +499,9 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 			FileExtension:      ChunkFileExtensionDefault,
 			BasePath:           mg.options.baseOutPath,
 			ChunkBaseFilename:  ChunkInitFileName,
-			HTTPUploader:       mg.options.httpUploader}
+			HTTPUploader:       mg.options.httpUploader,
+			S3Uploader:         mg.options.s3Uploader,
+		}
 
 		newChunk := mediachunk.New(0, chunkInitOptions)
 		mg.initChunk = &newChunk
@@ -522,7 +529,8 @@ func (mg *ManifestGenerator) createChunk(isInit bool) {
 				FileExtension:      ChunkFileExtensionDefault,
 				BasePath:           mg.options.baseOutPath,
 				ChunkBaseFilename:  mg.options.chunkBaseFilename,
-				HTTPUploader:       mg.options.httpUploader}
+				HTTPUploader:       mg.options.httpUploader,
+				S3Uploader:         mg.options.s3Uploader}
 
 			if mg.options.lhlsAdvancedChunks > 0 {
 				chunkOptions.LHLS = true

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 if [ $# -lt 1 ]; then
-	echo "Use ./single-rendition-tcp-to-disc.sh [path] [TEXT-TO-PREFIX-TO-PATH]\n"
-    echo "Example: ./single-rendition-tcp-to-disc.sh \"../results\" \"pipe-disc\""
+	echo "Use ./single-rendition-pipe-to-disc.sh [path] [TEXT-TO-PREFIX-TO-PATH]\n"
+    echo "Example: ./single-rendition-pipe-to-disc.sh \"../results\" \"pipe-disc\""
 	# exit 1
 fi
 

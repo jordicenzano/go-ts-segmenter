@@ -31,9 +31,9 @@ type S3Uploader struct {
 
 // AWSLocalCreds local creds for debugging
 type AWSLocalCreds struct {
-	valid     bool
-	awsID     string
-	awsSecret string
+	Valid     bool
+	AWSId     string
+	AWSSecret string
 }
 
 // New Creates a chunk instance
@@ -50,11 +50,11 @@ func New(log *logrus.Logger, s3Bucket string, s3Region string, s3UploadTimeOutMs
 	// more information.
 	var awsConfig *aws.Config = nil
 	var awsSession *session.Session = nil
-	if awsCreds.valid {
-		creds := credentials.NewStaticCredentials(awsCreds.awsID, awsCreds.awsSecret, "")
+	if awsCreds.Valid {
+		creds := credentials.NewStaticCredentials(awsCreds.AWSId, awsCreds.AWSSecret, "")
 		_, err := creds.Get()
 		if err != nil {
-			log.Error("ERROR getting local credentials with ID ", awsCreds.awsID)
+			log.Error("ERROR getting local credentials with ID ", awsCreds.AWSId)
 		}
 		awsConfig = aws.NewConfig().WithRegion(s3Region).WithCredentials(creds)
 

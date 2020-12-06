@@ -29,7 +29,7 @@ func TestUploadLocalFile(t *testing.T) {
 	UploadFilePath := "test/testSmall-" + pseudoUUID() + ".ts"
 
 	// Used computer default creds
-	awsCreds := AWSLocalCreds{valid: false}
+	awsCreds := AWSLocalCreds{Valid: false}
 	// Upload to test bucket
 	up := New(nil, "live-dist-test", "us-east-1", 10000, false, awsCreds)
 

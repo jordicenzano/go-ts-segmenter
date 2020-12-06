@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/s3uploader"
 	"github.com/sirupsen/logrus"
 )
 
@@ -70,6 +71,7 @@ type Hls struct {
 	initChunkDataFileName string
 	outputType            OutputTypes
 	httpUploader          *httpuploader.HTTPUploader
+	s3Uploader            *s3uploader.S3Uploader
 	isClosed              bool
 }
 
@@ -85,6 +87,7 @@ func New(
 	initChunkDataFileName string,
 	outputType OutputTypes,
 	httpUploader *httpuploader.HTTPUploader,
+	s3Uploader *s3uploader.S3Uploader,
 ) Hls {
 	h := Hls{
 		log,
@@ -100,6 +103,7 @@ func New(
 		initChunkDataFileName,
 		outputType,
 		httpUploader,
+		s3Uploader,
 		false,
 	}
 
@@ -118,12 +122,9 @@ func (p *Hls) saveChunklist() error {
 
 	if p.outputType == HlsOutputModeFile {
 		ret = p.saveManifestToFile(hlsStrByte)
-	} else if p.outputType == HlsOutputModeHTTP {
-		ret = p.saveManifestToHTTP(hlsStrByte)
-	} else if p.outputType == HlsOutputModeS3 {
-		//TODO: JOC ret = p.saveManifestToS3(hlsStrByte)
+	} else if p.outputType == HlsOutputModeHTTP || p.outputType == HlsOutputModeS3 {
+		ret = p.saveManifestExternal(hlsStrByte, p.outputType)
 	}
-
 	return ret
 }
 
@@ -156,13 +157,17 @@ func (p *Hls) saveManifestToFile(manifestByte []byte) error {
 	return nil
 }
 
-func (p *Hls) saveManifestToHTTP(manifestByte []byte) error {
+func (p *Hls) saveManifestExternal(manifestByte []byte, outputType OutputTypes) error {
 	if p.chunklistFileName != "" {
 		h := make(map[string]string)
 		if strings.ToLower(path.Ext(p.chunklistFileName)) == ".m3u8" {
 			h["Content-Type"] = "application/vnd.apple.mpegurl"
 		}
 
+		// TODO: Use interfaces
+		if outputType == HlsOutputModeS3 {
+			return p.s3Uploader.UploadData(manifestByte, p.chunklistFileName, h)
+		}
 		return p.httpUploader.UploadData(manifestByte, p.chunklistFileName, h)
 	}
 	return nil

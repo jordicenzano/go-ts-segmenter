@@ -37,6 +37,10 @@ Usage of ./bin/go-ts-segmenter:
         Audio PID to parse (default -1)
   -apids
         Enable auto PID detection, if true no need to pass vpid and apid (default true)
+  -awsId string
+        AWSId in case you do not want to use default machine credentials
+  -awsSecret string
+        AWSSecret in case you do not want to use default machine credentials
   -chunklistFilename string
         Chunklist filename (default "chunklist.m3u8")
   -chunksBaseFilename string
@@ -54,7 +58,7 @@ Usage of ./bin/go-ts-segmenter:
   -inputType int
         Where gets the input data (1-stdin, 2-TCP socket) (default 1)
   -insecure
-        Skips CA verification for HTTPS
+        Skips CA verification for HTTPS out
   -lhls int
         If > 0 activates LHLS, and it indicates the number of advanced chunks to create
   -liveWindowSize int
@@ -64,13 +68,21 @@ Usage of ./bin/go-ts-segmenter:
   -logsPath string
         Logs file path
   -manifestDestinationType int
-        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP) (default 1)
+        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP, 3- S3) (default 1)
   -manifestType int
         Manifest to generate (0- Vod, 1- Live event, 2- Live sliding window (default 2)
   -mediaDestinationType int
-        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular) (default 1)
+        Indicates where the destination (0- No output, 1- File + flag indicator, 2- HTTP chunked transfer, 3- HTTP regular, 4- S3 regular) (default 1)
   -protocol string
         HTTP Scheme (http, https) (default "http")
+  -s3Bucket string
+        S3 bucket to upload files, in case of sing an S3 destination
+  -s3IsPublicRead
+        Set ACL = "public-read" for all S3 uploads
+  -s3Region string
+        Specific aws region to use for AWS S3 destination
+  -s3UploadTimeout int
+        Timeout for any S3 upload in MS (default 10000)
   -targetDur float
         Target chunk duration in seconds (default 4)
   -verbose
@@ -115,6 +127,17 @@ cd scripts
 ```
 3. Play the resulting stream (playback URL: `http://localhost:9094/pipe-http/playlist.m3u8`) with a player that supports LHLS, or you can also play it with any HLS player such Safari.
 In both cases you will see a latency reduction. In the case of an LHLS player you will probably see <1s latency, in regular HLS players you will see a latency similar to target duration.
+
+## Examples output to S3
+- In this example we will send ONLY the resulting media segments to S3.
+1. Start the following script [single-rendition-media-tcp-to-s3.sh](./scripts/single-rendition-media-tcp-to-s3.sh):
+```
+cd scripts
+./single-rendition-media-tcp-to-s3.sh NAME-OF-DEST-BUCKET
+```
+Note: By default will use the default AWS credentials of the current user
+
+2. You should find the media files in the following place in the specified bucket `results/720p_00000.ts`
 
 # Docker
 ## Pulling image from docker hub
