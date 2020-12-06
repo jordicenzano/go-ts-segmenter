@@ -2,13 +2,9 @@ package mediachunk
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math/rand"
-	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,33 +31,33 @@ const (
 
 	// ChunkOutputModeHTTPRegular chunks to chunked streaming server
 	ChunkOutputModeHTTPRegular
+
+	// ChunkOutputModeS3 chunks to S3
+	ChunkOutputModeS3
 )
 
 // Options Chunking options
 type Options struct {
-	Log                     *logrus.Logger
-	OutputType              OutputTypes
-	LHLS                    bool
-	EstimatedDurationS      float64
-	FileNumberLength        int
-	GhostPrefix             string
-	FileExtension           string
-	BasePath                string
-	ChunkBaseFilename       string
-	HTTPClient              *http.Client
-	HTTPScheme              string
-	HTTPHost                string
-	MaxHTTPRetries          int
-	InitialHTTPRetryDelayMs int
+	Log                *logrus.Logger
+	OutputType         OutputTypes
+	LHLS               bool
+	EstimatedDurationS float64
+	FileNumberLength   int
+	GhostPrefix        string
+	FileExtension      string
+	BasePath           string
+	ChunkBaseFilename  string
+	HTTPUploader       *httpuploader.HTTPUploader
 }
 
 // Chunk Chunk class
 type Chunk struct {
+	// Used by HTTP chunked based
+	httpWriteChan chan<- []byte
+
+	// Used by file chunk write
 	fileWriter     *bufio.Writer
 	fileDescriptor *os.File
-
-	httpWriteChan chan<- []byte
-	httpReq       *http.Request
 
 	options Options
 
@@ -74,13 +71,13 @@ type Chunk struct {
 	// Bytes received
 	totalBytes int
 
-	// Epoch time when we recived first byte for this chunk
+	// Epoch time when we received first byte for this chunk
 	createdAt int64
 }
 
 // New Creates a chunk instance
 func New(index uint64, options Options) Chunk {
-	c := Chunk{nil, nil, nil, nil, options, index, "", "", "", 0, time.Now().UnixNano()}
+	c := Chunk{nil, nil, nil, options, index, "", "", "", 0, time.Now().UnixNano()}
 
 	c.filename = c.createFilename(options.BasePath, options.ChunkBaseFilename, index, options.FileNumberLength, options.FileExtension, "")
 	if options.GhostPrefix != "" {
@@ -137,134 +134,32 @@ func (c *Chunk) initializeChunkFile() error {
 	return nil
 }
 
-func (c *Chunk) uploadChunkTmpFileToHTTPRetry() error {
-	var ret error = nil
-	maxRetries := c.options.MaxHTTPRetries
-	retryPauseInitialMs := c.options.InitialHTTPRetryDelayMs
-	retryIntent := 0
-
-	for {
-		if retryIntent >= maxRetries {
-			c.options.Log.Error("ERROR chunk lost becasue server busy ", c.tmpFilename, "(", c.filename, ")")
-			break
-		} else {
-			retrieableErr := c.uploadChunkTmpFileToHTTP()
-			if retrieableErr != nil {
-				time.Sleep(time.Duration(retryPauseInitialMs*retryIntent) * time.Millisecond)
-			} else {
-				break
-			}
-		}
-		retryIntent++
-	}
-
-	return ret
-}
-
 func (c *Chunk) uploadChunkTmpFileToHTTP() error {
 	var ret error = nil
 
 	if c.tmpFilename != "" {
-		f, errOpen := os.Open(c.tmpFilename)
-		defer f.Close()
-		if errOpen != nil {
-			c.options.Log.Error("ERROR reading  ", c.tmpFilename, "(", c.filename, ")")
-		} else {
-			req := &http.Request{
-				Method: "POST",
-				URL: &url.URL{
-					Scheme: c.options.HTTPScheme,
-					Host:   c.options.HTTPHost,
-					Path:   "/" + c.filename,
-				},
-				ProtoMajor:    1,
-				ProtoMinor:    1,
-				ContentLength: -1,
-				Body:          ioutil.NopCloser(f),
-				Header:        http.Header{},
-			}
-
-			if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-				req.Header.Set("Content-Type", "video/MP2T")
-				req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
-				req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
-				req.Header.Set("Joc-Hls-CreatedAt-Ns", strconv.FormatInt(c.createdAt, 10))
-			}
-
-			resp, errReq := c.options.HTTPClient.Do(req)
-			if errReq != nil {
-				c.options.Log.Error("Error uploading ", c.tmpFilename, "(", c.filename, ")", "Error: ", errReq)
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode < 400 {
-					// Done
-					c.options.Log.Info("Upload of ", c.tmpFilename, "(", c.filename, ") complete")
-				} else if resp.StatusCode == http.StatusServiceUnavailable {
-					// Need to retry
-					c.options.Log.Debug("Warning server busy for ", c.tmpFilename, "(", c.filename, "), RETRYING!")
-					ret = errors.New("Retryable upload error")
-				} else {
-					// Not retriable error
-					c.options.Log.Error("Error server uploading ", c.tmpFilename, "(", c.filename, ")", "HTTP Error: ", resp.StatusCode)
-				}
-			}
+		h := make(map[string]string)
+		if strings.ToLower(path.Ext(c.filename)) == ".ts" {
+			h["Content-Type"] = "video/MP2T"
+			h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
+			h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
+			h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
 		}
+		ret = c.options.HTTPUploader.UploadLocalFile(c.tmpFilename, c.filename, h)
 	}
 
 	return ret
 }
 
 func (c *Chunk) initializeChunkHTTPChunkedTransfer() error {
-	r, w := io.Pipe()
-	writeChan := make(chan []byte)
-	c.httpWriteChan = writeChan
-
-	// open request
-	req := &http.Request{
-		Method: "POST",
-		URL: &url.URL{
-			Scheme: c.options.HTTPScheme,
-			Host:   c.options.HTTPHost,
-			Path:   "/" + c.filename,
-		},
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		ContentLength: -1,
-		Body:          r,
-		Header:        http.Header{},
-	}
-
+	h := make(map[string]string)
 	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
-		req.Header.Set("Content-Type", "video/MP2T")
-		req.Header.Set("Joc-Hls-Chunk-Seq-Number", strconv.FormatUint(c.index, 10))
-		req.Header.Set("Joc-Hls-Targetduration-Ms", strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64))
-		req.Header.Set("Joc-Hls-CreatedAt-Ns", strconv.FormatInt(c.createdAt, 10))
+		h["Content-Type"] = "video/MP2T"
+		h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
+		h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
+		h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
 	}
-	c.httpReq = req
-
-	go func() {
-		defer w.Close()
-
-		for buf := range writeChan {
-			n, err := w.Write(buf)
-			c.options.Log.Debug("Wrote ", n, " bytes to chunk ", c.filename)
-			if n != len(buf) && err != nil {
-				panic(err)
-			}
-		}
-	}()
-
-	go func() {
-		c.options.Log.Debug("Opening connection to upload ", c.filename)
-		c.options.Log.Debug("Req: ", req)
-		_, err := c.options.HTTPClient.Do(req)
-
-		if err != nil {
-			c.options.Log.Error("Error uploading ", c.filename, ". Error: ", err)
-		} else {
-			c.options.Log.Debug("Upload of ", c.filename, " complete")
-		}
-	}()
+	c.httpWriteChan = c.options.HTTPUploader.UploadChunkedTransfer(c.filename, h)
 
 	return nil
 }
@@ -279,8 +174,9 @@ func (c *Chunk) InitializeChunk() error {
 		ret = c.initializeChunkHTTPChunkedTransfer()
 	} else if c.options.OutputType == ChunkOutputModeHTTPRegular {
 		ret = c.initializeChunkTempFile()
+	} else if c.options.OutputType == ChunkOutputModeS3 {
+		//TODO: JOC ret = c.initializeS3TempFile()
 	}
-
 	return ret
 }
 
@@ -304,7 +200,7 @@ func (c *Chunk) closeChunkTmpFileToHTTP() {
 	}
 
 	// Upload to HTTP server
-	c.uploadChunkTmpFileToHTTPRetry()
+	c.uploadChunkTmpFileToHTTP()
 
 	// Delete temp file
 	exists, _ := fileExists(c.tmpFilename)
@@ -328,6 +224,8 @@ func (c *Chunk) Close() {
 		c.closeChunkHTTPChunkedTransfer()
 	} else if c.options.OutputType == ChunkOutputModeHTTPRegular {
 		c.closeChunkTmpFileToHTTP()
+	} else if c.options.OutputType == ChunkOutputModeS3 {
+		//TODO: JOC c.closeChunkTmpFileToS3()
 	}
 
 	return
@@ -373,8 +271,9 @@ func (c *Chunk) AddData(buf []byte) error {
 		ret = c.addDataChunkFile(buf)
 	} else if c.options.OutputType == ChunkOutputModeHTTPChunkedTransfer {
 		ret = c.addDataChunkHTTP(buf)
+	} else if c.options.OutputType == ChunkOutputModeS3 {
+		//TODO: JOC ret = c.addDataChunkS3(buf)
 	}
-
 	c.totalBytes = c.totalBytes + len(buf)
 
 	return ret

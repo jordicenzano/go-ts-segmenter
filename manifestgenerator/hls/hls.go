@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
 	"github.com/sirupsen/logrus"
 )
 
@@ -43,6 +42,9 @@ const (
 
 	// HlsOutputModeHTTP data to HTTP streaming server
 	HlsOutputModeHTTP
+
+	// HlsOutputModeS3 data to S3 (using AWS API)
+	HlsOutputModeS3
 )
 
 // Chunk Chunk information
@@ -67,11 +69,8 @@ type Hls struct {
 	chunklistFileName     string
 	initChunkDataFileName string
 	outputType            OutputTypes
-	httpClient            *http.Client
-	httpScheme            string
-	httpHost              string
-
-	isClosed bool
+	httpUploader          *httpuploader.HTTPUploader
+	isClosed              bool
 }
 
 // New Creates a hls chunklist manifest
@@ -85,9 +84,7 @@ func New(
 	chunklistFileName string,
 	initChunkDataFileName string,
 	outputType OutputTypes,
-	httpClient *http.Client,
-	httpScheme string,
-	httpHost string,
+	httpUploader *httpuploader.HTTPUploader,
 ) Hls {
 	h := Hls{
 		log,
@@ -102,9 +99,7 @@ func New(
 		chunklistFileName,
 		initChunkDataFileName,
 		outputType,
-		httpClient,
-		httpScheme,
-		httpHost,
+		httpUploader,
 		false,
 	}
 
@@ -125,6 +120,8 @@ func (p *Hls) saveChunklist() error {
 		ret = p.saveManifestToFile(hlsStrByte)
 	} else if p.outputType == HlsOutputModeHTTP {
 		ret = p.saveManifestToHTTP(hlsStrByte)
+	} else if p.outputType == HlsOutputModeS3 {
+		//TODO: JOC ret = p.saveManifestToS3(hlsStrByte)
 	}
 
 	return ret
@@ -160,35 +157,14 @@ func (p *Hls) saveManifestToFile(manifestByte []byte) error {
 }
 
 func (p *Hls) saveManifestToHTTP(manifestByte []byte) error {
-
 	if p.chunklistFileName != "" {
-		req := &http.Request{
-			Method: "POST",
-			URL: &url.URL{
-				Scheme: p.httpScheme,
-				Host:   p.httpHost,
-				Path:   "/" + p.chunklistFileName,
-			},
-			ProtoMajor:    1,
-			ProtoMinor:    1,
-			ContentLength: -1,
-			Body:          ioutil.NopCloser(bytes.NewReader(manifestByte)),
-			Header:        http.Header{},
-		}
-
+		h := make(map[string]string)
 		if strings.ToLower(path.Ext(p.chunklistFileName)) == ".m3u8" {
-			req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
+			h["Content-Type"] = "application/vnd.apple.mpegurl"
 		}
 
-		_, err := p.httpClient.Do(req)
-
-		if err != nil {
-			p.log.Error("Error uploading ", p.chunklistFileName, ". Error: ", err)
-		} else {
-			p.log.Debug("Upload of ", p.chunklistFileName, " complete")
-		}
+		return p.httpUploader.UploadData(manifestByte, p.chunklistFileName, h)
 	}
-
 	return nil
 }
 

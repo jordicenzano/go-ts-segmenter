@@ -1,16 +1,14 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"net"
-	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/hls"
 	"github.com/jordicenzano/go-ts-segmenter/manifestgenerator/mediachunk"
+	"github.com/jordicenzano/go-ts-segmenter/uploaders/httpuploader"
 	"github.com/sirupsen/logrus"
 
 	"bufio"
@@ -69,17 +67,10 @@ func main() {
 		os.MkdirAll(*baseOutPath, 0744)
 	}
 
-	var tr = http.DefaultTransport
-	if (strings.Compare(*httpScheme, "https") == 0) && (*httpsInsecure) {
-		// Setup HTTPS client in dev env, skips CA verification
-		log.Warn("Skipping CA cert verification!")
-		tlsConfig := &tls.Config{InsecureSkipVerify: true}
-		tr = &http.Transport{TLSClientConfig: tlsConfig}
-	}
-
-	client := http.Client{
-		Transport: tr,
-		Timeout:   0,
+	var httpUploader *httpuploader.HTTPUploader = nil
+	if isHTTPout() {
+		httpUploaderTmp := httpuploader.New(log, *httpsInsecure, *httpScheme, *httpHost, *httpMaxRetries, *initialHTTPRetryDelay)
+		httpUploader = &httpUploaderTmp
 	}
 
 	mg := manifestgenerator.New(log,
@@ -96,12 +87,7 @@ func main() {
 		hls.ManifestTypes(*manifestTypeInt),
 		*liveWindowSize,
 		*lhlsAdvancedChunks,
-		&client,
-		*httpScheme,
-		*httpHost,
-		*httpMaxRetries,
-		*initialHTTPRetryDelay,
-	)
+		httpUploader)
 
 	// Create the requested input reader
 	var r *bufio.Reader = nil
@@ -149,6 +135,13 @@ func main() {
 	log.Info("Exit because detected EOF in the input reader")
 
 	os.Exit(0)
+}
+
+func isHTTPout() bool {
+	if (*mediaDestinationType == 2) || (*mediaDestinationType == 3) || (*manifestDestinationType == 2) {
+		return true
+	}
+	return false
 }
 
 func configureLogger(verbose bool, logPath string) *logrus.Logger {
