@@ -12,8 +12,12 @@ S3_BUCKET="${1:-"live-dist-test"}"
 # Overlay base text
 TEXT="SOURCE-"
 
+# ObjKeyPath
+STREAM_ID=`date '+%Y%m%d%H%M%S'`
+DST_PATH="input/$STREAM_ID"
+
 # Starts segmenter 
-../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -mediaDestinationType 4 -chunksBaseFilename 720p_ -chunklistFilename 720p.m3u8 &
+../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
 PID_720p=$!
 echo "Started go-ts-segmenter for 720p as PID $PID_720p"
 

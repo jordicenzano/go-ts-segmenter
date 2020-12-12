@@ -63,10 +63,6 @@ func New(log *logrus.Logger, s3Bucket string, s3Region string, s3UploadTimeOutMs
 		awsSession = session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,
 		}))
-
-		//awsConfig = aws.NewConfig()
-		// Get all data from running machine
-		//awsSession = session.Must(session.NewSession())
 	}
 
 	s3Session := s3.New(awsSession, awsConfig)
