@@ -1,24 +1,14 @@
 package s3uploader
 
 import (
-	"crypto/rand"
-	"fmt"
+	"strconv"
 	"testing"
+	"time"
 )
 
-// Note - NOT RFC4122 compliant
-func pseudoUUID() (uuid string) {
-
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-
-	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-
-	return
+func getDateTimeStr() string {
+	t := time.Now()
+	return strconv.Itoa(t.Year()) + strconv.Itoa(int(t.Month())) + strconv.Itoa(t.Day()) + strconv.Itoa(t.Hour()) + strconv.Itoa(t.Minute()) + strconv.Itoa(t.Second())
 }
 
 // Do not run this test, it uses real S3 and local default config
@@ -26,7 +16,7 @@ func TestUploadLocalFile(t *testing.T) {
 	testFilePath := "../../fixture/testSmall.ts"
 	headerName := "hName"
 	headerValue := "hValue"
-	UploadFilePath := "test/testSmall-" + pseudoUUID() + ".ts"
+	UploadFilePath := "input/testID/testSmall-" + getDateTimeStr() + ".ts"
 
 	// Used computer default creds
 	awsCreds := AWSLocalCreds{Valid: false}

@@ -135,7 +135,7 @@ In both cases you will see a latency reduction. In the case of an LHLS player yo
 cd scripts
 ./single-rendition-media-tcp-to-s3.sh NAME-OF-DEST-BUCKET
 ```
-Note: By default will use the default AWS credentials of the current user
+Note: *By default it will use the default AWS credentials of the current user*
 
 2. You should find the media files in the following place in the specified bucket `results/720p_00000.ts`
 
