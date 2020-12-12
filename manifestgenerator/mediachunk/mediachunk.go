@@ -137,7 +137,7 @@ func (c *Chunk) initializeChunkFile() error {
 }
 
 func (c *Chunk) initializeChunkHTTPChunkedTransfer() error {
-	c.httpWriteChan = c.options.HTTPUploader.UploadChunkedTransfer(c.filename, c.getChunkHeaders())
+	c.httpWriteChan = c.options.HTTPUploader.UploadChunkedTransfer(c.filename, c.getChunkHeaders(-1))
 
 	return nil
 }
@@ -169,14 +169,14 @@ func (c *Chunk) closeChunkFile() {
 	}
 }
 
-func (c *Chunk) closeChunkTmpFileExternal(outputType OutputTypes) {
+func (c *Chunk) closeChunkTmpFileExternal(outputType OutputTypes, durationS float64) {
 	if c.fileWriter != nil {
 		c.fileDescriptor.Sync()
 		c.fileDescriptor.Close()
 	}
 
 	if c.tmpFilename != "" {
-		h := c.getChunkHeaders()
+		h := c.getChunkHeaders(durationS)
 		if outputType == ChunkOutputModeS3 {
 			c.options.S3Uploader.UploadLocalFile(c.tmpFilename, c.filename, h)
 		} else {
@@ -198,25 +198,28 @@ func (c *Chunk) closeChunkHTTPChunkedTransfer() {
 }
 
 //Close Closes chunk
-func (c *Chunk) Close() {
+func (c *Chunk) Close(durationS float64) {
 	c.options.Log.Debug("Closing chunk ", c.filename)
 	if c.options.OutputType == ChunkOutputModeFile {
 		c.closeChunkFile()
 	} else if c.options.OutputType == ChunkOutputModeHTTPChunkedTransfer {
 		c.closeChunkHTTPChunkedTransfer()
 	} else if c.options.OutputType == ChunkOutputModeHTTPRegular || c.options.OutputType == ChunkOutputModeS3 {
-		c.closeChunkTmpFileExternal(c.options.OutputType)
+		c.closeChunkTmpFileExternal(c.options.OutputType, durationS)
 	}
 	return
 }
 
-func (c *Chunk) getChunkHeaders() map[string]string {
+func (c *Chunk) getChunkHeaders(durationS float64) map[string]string {
 	h := make(map[string]string)
 	if strings.ToLower(path.Ext(c.filename)) == ".ts" {
 		h["Content-Type"] = "video/MP2T"
 		h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
 		h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
 		h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
+		if durationS >= 0 {
+			h["Joc-Hls-Duration-Ms"] = strconv.FormatFloat(durationS*1000, 'f', 8, 64)
+		}
 	}
 	return h
 }

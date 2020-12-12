@@ -448,7 +448,7 @@ func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64, isF
 		if mg.currentChunks != nil && len(mg.currentChunks) > 0 {
 			currentChunk := mg.currentChunks[0]
 
-			currentChunk.Close()
+			currentChunk.Close(chunkDurationS)
 
 			//NO LHLS
 			if mg.options.lhlsAdvancedChunks <= 0 {
@@ -472,7 +472,7 @@ func (mg *ManifestGenerator) closeChunk(isInit bool, chunkDurationS float64, isF
 		}
 	} else {
 		if mg.initChunk != nil {
-			mg.initChunk.Close()
+			mg.initChunk.Close(-1)
 
 			mg.hlsChunklist.SetInitChunk(mg.initChunk.GetFilename())
 
