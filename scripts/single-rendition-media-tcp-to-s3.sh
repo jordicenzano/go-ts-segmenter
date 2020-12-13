@@ -14,7 +14,7 @@ TEXT="SOURCE-"
 
 # ObjKeyPath
 STREAM_ID=`date '+%Y%m%d%H%M%S'`
-DST_PATH="input/$STREAM_ID"
+DST_PATH="ingest/$STREAM_ID"
 
 # Starts segmenter 
 ../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
