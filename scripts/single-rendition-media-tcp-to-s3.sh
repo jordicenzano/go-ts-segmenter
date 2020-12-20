@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 
-if [ $# -lt 1 ]; then
-	echo "Use ./single-rendition-media-tcp-to-s3.sh S3BUCKET [StreamID]\n"
+if [ $# -lt 0 ]; then
+	echo "Use ./single-rendition-media-tcp-to-s3.sh [S3Bucket] [S3Region] [StreamID]\n"
     echo "Example: ./single-rendition-media-tcp-to-s3.sh"
 	#exit 1
 fi
 
-# S3 Bucket
+# S3 Data
 S3_BUCKET="${1:-"live-dist-test"}"
+S3_REGION="${2:-"us-east-1"}"
 
 # ObjKeyPath
 STREAM_ID_DEF=`date '+%Y%m%d%H%M%S'`
-STREAM_ID="${2:-"$STREAM_ID_DEF"}"
+STREAM_ID="${3:-"$STREAM_ID_DEF"}"
 DST_PATH="ingest/$STREAM_ID"
 
 echo "Using s3 path: $DST_PATH"
 
 # Starts segmenter 
-../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
+../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -s3Region $S3_REGION -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
 PID_720p=$!
 echo "Started go-ts-segmenter for 720p as PID $PID_720p"
 
