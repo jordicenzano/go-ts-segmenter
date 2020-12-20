@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -18,8 +19,7 @@ import (
 
 // S3Uploader HTTP uploader class class
 type S3Uploader struct {
-	AwsSession *session.Session
-	S3Session  *s3.S3
+	S3Session *s3.S3
 
 	Log                        *logrus.Logger
 	S3Bucket                   string
@@ -48,26 +48,24 @@ func New(log *logrus.Logger, s3Bucket string, s3Region string, s3UploadTimeOutMs
 	// Session should be shared where possible to take advantage of
 	// configuration and credential caching. See the session package for
 	// more information.
-	var awsConfig *aws.Config = nil
-	var awsSession *session.Session = nil
+	var s3Session *s3.S3 = nil
 	if awsCreds.Valid {
 		creds := credentials.NewStaticCredentials(awsCreds.AWSId, awsCreds.AWSSecret, "")
 		_, err := creds.Get()
 		if err != nil {
 			log.Error("ERROR getting local credentials with ID ", awsCreds.AWSId)
 		}
-		awsConfig = aws.NewConfig().WithRegion(s3Region).WithCredentials(creds)
-
-		awsSession = session.New()
+		awsConfig := aws.NewConfig().WithRegion(s3Region).WithCredentials(creds)
+		awsSession := session.New()
+		s3Session = s3.New(awsSession, awsConfig)
 	} else {
-		awsSession = session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable,
+		awsSession := session.Must(session.NewSessionWithOptions(session.Options{
+			SharedConfigState:       session.SharedConfigEnable,
+			AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
 		}))
+		s3Session = s3.New(awsSession)
 	}
-
-	s3Session := s3.New(awsSession, awsConfig)
-
-	return S3Uploader{awsSession, s3Session, log, s3Bucket, s3Region, s3UploadTimeOutMs, s3GrantReadToUploadedFiles, awsCreds}
+	return S3Uploader{s3Session, log, s3Bucket, s3Region, s3UploadTimeOutMs, s3GrantReadToUploadedFiles, awsCreds}
 }
 
 // UploadLocalFile Uploads a file from the filesystem
