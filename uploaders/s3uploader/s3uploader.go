@@ -63,7 +63,11 @@ func New(log *logrus.Logger, s3Bucket string, s3Region string, s3UploadTimeOutMs
 			SharedConfigState:       session.SharedConfigEnable,
 			AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
 		}))
-		s3Session = s3.New(awsSession)
+		var awsConfig *aws.Config = nil
+		if s3Region != "" {
+			awsConfig = aws.NewConfig().WithRegion(s3Region)
+		}
+		s3Session = s3.New(awsSession, awsConfig)
 	}
 	return S3Uploader{s3Session, log, s3Bucket, s3Region, s3UploadTimeOutMs, s3GrantReadToUploadedFiles, awsCreds}
 }
