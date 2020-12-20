@@ -23,7 +23,7 @@ echo "Waiting for stream in: ${DST_PATH}"
 echo "Using s3 upload path: ${DST_PATH}"
 
 # Starts segmenter 
-../bin/go-ts-segmenter -inputType 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -s3Region $S3_REGION -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
+../bin/go-ts-segmenter -inputType 2 -targetDur 2 -manifestDestinationType 0 -s3Bucket $S3_BUCKET -s3Region $S3_REGION -mediaDestinationType 4 -dstPath $DST_PATH -chunksBaseFilename source_ &
 PID_SRC=$!
 echo "Started go-ts-segmenter for source as PID $PID_SRC"
 
