@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
 if [ $# -lt 1 ]; then
-	echo "Use ./transmuxed-file-to-s3.sh FILE S3Bucket [S3Region] [streamID]\n"
-    echo "streamID: RTMP stream name (example: 20201220101213)"
-    echo "Example: ./transmuxed-file-to-s3.sh ~/test.mp4 testBucket us-east-1 streamKey"
+	echo "Use ./transmuxed-file-to-s3.sh FILE S3Bucket [S3Region] [StreamID] [Loop]\n"
+    echo "S3Bucket: S3 bucket to use"
+    echo "S3Region: S3 region to use (Default: us-east-1)"
+    echo "StreamID: Stream name (Default: YYYYMMDDHHMMSS)"
+    echo "Loop: Use file loop (Default 0)"
+    echo "Example: ./transmuxed-file-to-s3.sh ~/test.mp4 testBucket us-east-1 streamKey 1"
     exit 1
 fi
 
@@ -19,6 +22,13 @@ STREAM_ID_DEF=`date '+%Y%m%d%H%M%S'`
 STREAM_ID="${4:-"$STREAM_ID_DEF"}"
 DST_PATH="ingest/${STREAM_ID}"
 
+# Set loop command
+IS_LOOP="${5:-"0"}"
+LOOP_CMD=""
+if [ "$IS_LOOP" -eq "1" ]; then
+    LOOP_CMD="-stream_loop -1"
+fi
+
 echo "Waiting for stream in: ${DST_PATH}"
 echo "Using s3 upload path: ${DST_PATH}"
 
@@ -29,7 +39,7 @@ echo "Started go-ts-segmenter for source as PID $PID_SRC"
 
 # Start RTMP listener / transmuxer
 ffmpeg -hide_banner -y \
--re -i $SRC_FILE \
+-re $LOOP_CMD -i $SRC_FILE \
 -c:v copy -c:a copy \
 -f mpegts "tcp://localhost:2002"
 
