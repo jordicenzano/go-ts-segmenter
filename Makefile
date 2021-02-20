@@ -10,7 +10,7 @@ PATH := $(shell pwd)/$(BINDIR):$(PATH)
 BINARY_NAME="go-ts-segmenter"
 
 # DOCKER Section
-include ./secrets/docker-creds.secrets
+-include ./secrets/docker-creds.secrets
 DOCKER_IMAGE_NAME = docker-go-ts-segmenter
 DOCKER_IMAGE_VERSION = 1.0
 
