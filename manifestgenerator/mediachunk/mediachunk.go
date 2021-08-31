@@ -207,7 +207,6 @@ func (c *Chunk) Close(durationS float64) {
 	} else if c.options.OutputType == ChunkOutputModeHTTPRegular || c.options.OutputType == ChunkOutputModeS3 {
 		c.closeChunkTmpFileExternal(c.options.OutputType, durationS)
 	}
-	return
 }
 
 func (c *Chunk) getChunkHeaders(durationS float64) map[string]string {
@@ -216,7 +215,7 @@ func (c *Chunk) getChunkHeaders(durationS float64) map[string]string {
 		h["Content-Type"] = "video/MP2T"
 		h["Joc-Hls-Chunk-Seq-Number"] = strconv.FormatUint(c.index, 10)
 		h["Joc-Hls-Targetduration-Ms"] = strconv.FormatFloat(c.options.EstimatedDurationS*1000, 'f', 8, 64)
-		h["Joc-Hls-CreatedAt-Ns"] = strconv.FormatInt(c.createdAt, 10)
+		h["Joc-Hls-Createdat-Ns"] = strconv.FormatInt(c.createdAt, 10)
 		if durationS >= 0 {
 			h["Joc-Hls-Duration-Ms"] = strconv.FormatFloat(durationS*1000, 'f', 8, 64)
 		}
