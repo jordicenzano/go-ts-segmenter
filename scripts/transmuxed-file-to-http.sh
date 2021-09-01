@@ -4,7 +4,7 @@ if [ $# -lt 1 ]; then
 	echo "Use ./transmuxed-file-to-http.sh FILEin URLhost [streamID] [Loop]\n"
     echo "FILEin: Input file"
     echo "URLhost: Host-port to send the chunks via HTTP (default \"localhost:9094\""
-    echo "streamID: StreamID to use, it is also the path for HTTP requests (default \"DATE WITH SECONDS\""
+    echo "streamID: StreamID to use, it is also the path for HTTP requests (default \"DATE WITH SECONDS\")"
     echo "Loop: Use file loop (Default 0)"
     echo "Example: ./transmuxed-file-to-http.sh ~/test.mp4 http://localhost:9094/ID1 1"
     exit 1
