@@ -26,7 +26,7 @@ DST_PATH="ingest/$STREAM_ID"
 echo "Waiting for RTMP stream in: ${RTMP_APP}/${STREAM_ID}"
 
 # Starts segmenter 
-../bin/go-ts-segmenter -inputType 2 -targetDur 7 -manifestDestinationType 0 -mediaDestinationType 3 -host $DST_HOST -dstPath $DST_PATH -chunksBaseFilename source_ &
+../bin/go-ts-segmenter -inputType 2 -targetDur 7.0 -manifestDestinationType 0 -mediaDestinationType 3 -host $DST_HOST -dstPath $DST_PATH -chunksBaseFilename source_ &
 PID_SRC=$!
 echo "Started go-ts-segmenter for source as PID $PID_SRC"
 
